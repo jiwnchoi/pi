@@ -49,7 +49,9 @@ const TOOLS: ReadonlySet<string> = new Set([
  * as color, so a running row is a hollow ring and a settled one is filled — readable in a
  * monochrome terminal or for anyone who cannot separate the green from the red.
  */
-const INDICATORS: Readonly<Record<RowStatus, { glyph: string; color: "success" | "error" | "warning" }>> = {
+const INDICATORS: Readonly<
+  Record<RowStatus, { glyph: string; color: "success" | "error" | "warning" }>
+> = {
   running: { glyph: "○", color: "warning" },
   success: { glyph: "●", color: "success" },
   error: { glyph: "●", color: "error" },
@@ -63,7 +65,8 @@ function indicator(status: RowStatus, theme: ThemeLike): string {
 }
 
 /** pi's search tools print one of these instead of a list when nothing matched. */
-const EMPTY_RESULT = /^(?:No matches found|No files found|No matching tools found|\(empty directory\))\s*$/i;
+const EMPTY_RESULT =
+  /^(?:No matches found|No files found|No matching tools found|\(empty directory\))\s*$/i;
 
 type ThemeLike = Theme;
 
@@ -249,7 +252,8 @@ function callLabel(toolName: string, args: Record<string, unknown>, cwd: string)
       return path ? shortPath(path, cwd) : cwd;
     }
     case "web_search": {
-      const query = str(args.query) ?? (Array.isArray(args.queries) ? str(args.queries[0]) : undefined);
+      const query =
+        str(args.query) ?? (Array.isArray(args.queries) ? str(args.queries[0]) : undefined);
       return query ?? "search";
     }
     case "tool_search": {
@@ -260,7 +264,10 @@ function callLabel(toolName: string, args: Record<string, unknown>, cwd: string)
       const command = str(args.command);
       if (!command) return "bash";
       // One line: the first command line, plus a marker when more follows.
-      const lines = command.split("\n").map((line) => line.trim()).filter(Boolean);
+      const lines = command
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
       const first = lines[0] ?? "bash";
       return lines.length > 1 ? `${first} …` : first;
     }
@@ -321,7 +328,11 @@ function outcomeSummary(toolName: string, text: string, isError: boolean): strin
 function highlightResult(text: string, args: Record<string, unknown>, theme: ThemeLike): string {
   const path = str(args.path) ?? str(args.file_path);
   const lang = path ? getLanguageFromPath(path) : undefined;
-  if (!lang) return text.split("\n").map((line) => theme.fg("toolOutput", line)).join("\n");
+  if (!lang)
+    return text
+      .split("\n")
+      .map((line) => theme.fg("toolOutput", line))
+      .join("\n");
   return highlightCode(text, lang).join("\n");
 }
 
@@ -369,7 +380,10 @@ function collapsedLine(
 /** First meaningful line of a script, so one row can show what it does. */
 function firstLine(text: string | undefined): string | undefined {
   if (!text) return undefined;
-  const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
   const first = lines.find((line) => !line.startsWith("//") && !line.startsWith("#")) ?? lines[0];
   return lines.length > 1 && first ? `${first} …` : first;
 }
@@ -538,14 +552,7 @@ export default function toolRows(pi: ExtensionAPI): void {
         component.setOnClick(() => toggleBody(state, context.invalidate));
         applyView(
           component,
-          viewFor(
-            toolName,
-            callArgs,
-            context.cwd,
-            state,
-            theme,
-            context.invalidate,
-          ),
+          viewFor(toolName, callArgs, context.cwd, state, theme, context.invalidate),
         );
         return component;
       },
@@ -579,14 +586,7 @@ export default function toolRows(pi: ExtensionAPI): void {
         component.setOnClick(() => toggleBody(state, context.invalidate));
         applyView(
           component,
-          viewFor(
-            toolName,
-            resultArgs,
-            context.cwd,
-            state,
-            theme,
-            context.invalidate,
-          ),
+          viewFor(toolName, resultArgs, context.cwd, state, theme, context.invalidate),
         );
         return component;
       },

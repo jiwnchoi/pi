@@ -38,13 +38,13 @@ Pi의 `UserMessageComponent` 에는 `setExpanded` 가 없어서 Ctrl+O 대상이
 }
 ```
 
-| 키 | 기본값 | 설명 |
-| --- | --- | --- |
-| `enabled` | `true` | false면 아무것도 하지 않고 원래 렌더러에 위임 |
-| `inputCollapsedRows` | `4` | 유저 메시지 접힘 행 수 |
-| `inputShowOmittedCount` | `true` | 유저 메시지 `+N lines` 표시 |
-| `inputExpandHint` | `false` | 유저 메시지에 `Ctrl+O to expand` 표시 |
-| `inputMinRows` | `12` | 이 행 수 이하인 메시지는 건드리지 않음 |
+| 키                      | 기본값  | 설명                                          |
+| ----------------------- | ------- | --------------------------------------------- |
+| `enabled`               | `true`  | false면 아무것도 하지 않고 원래 렌더러에 위임 |
+| `inputCollapsedRows`    | `4`     | 유저 메시지 접힘 행 수                        |
+| `inputShowOmittedCount` | `true`  | 유저 메시지 `+N lines` 표시                   |
+| `inputExpandHint`       | `false` | 유저 메시지에 `Ctrl+O to expand` 표시         |
+| `inputMinRows`          | `12`    | 이 행 수 이하인 메시지는 건드리지 않음        |
 
 파일 mtime을 보고 갱신하므로 세션 재시작 없이 반영됩니다. 단, extension 코드
 자체를 고치면 `pi` 재실행이 필요합니다.
@@ -59,8 +59,8 @@ Pi의 `UserMessageComponent` 에는 `setExpanded` 가 없어서 Ctrl+O 대상이
 
 ## 테스트
 
-전역 설치된 Pi를 사용해 실제 사용자 메시지 렌더러와 마우스 디스패치를 검증합니다.
+워크스페이스에 설치된 Pi 패키지를 사용해 실제 사용자 메시지 렌더러와 마우스 디스패치를 검증합니다. 저장소 루트에서 실행하세요.
 
 ```bash
-node --test tests/input-condense.test.mjs
+pnpm test
 ```

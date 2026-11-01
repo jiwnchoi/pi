@@ -1,50 +1,48 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { after, test } from "node:test";
-import { pathToFileURL } from "node:url";
+import { afterAll, test } from "vitest";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { UserMessageComponent } from "@earendil-works/pi-coding-agent";
+import { Container } from "@earendil-works/pi-tui";
+import extension from "../extensions/input-condense.ts";
 
-const pi = execFileSync("/bin/sh", ["-c", "command -v pi"], { encoding: "utf8" }).trim();
-let root = dirname(realpathSync(pi));
-while (!existsSync(join(root, "package.json"))) {
-  const parent = dirname(root);
-  if (parent === root) throw new Error("Cannot locate the installed Pi package");
-  root = parent;
-}
-const require = createRequire(join(root, "package.json"));
-const agentEntry = join(root, "dist/index.js");
-const tuiEntry = require.resolve("@earendil-works/pi-tui");
-const { createJiti } = await import(pathToFileURL(require.resolve("jiti")));
-const jiti = createJiti(import.meta.url, {
-  alias: {
-    "@earendil-works/pi-coding-agent": agentEntry,
-    "@earendil-works/pi-tui": tuiEntry,
-  },
-});
-const { UserMessageComponent } = await import(pathToFileURL(agentEntry));
-const { Container } = await import(pathToFileURL(tuiEntry));
-const { initTheme } = await import(pathToFileURL(join(root, "dist/modes/interactive/theme/theme.js")));
+const agentDist = dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent")));
+const { initTheme } = await import(
+  pathToFileURL(join(agentDist, "modes/interactive/theme/theme.js")).href
+);
 initTheme("dark");
-const { default: extension } = await jiti.import(new URL("../extensions/input-condense.ts", import.meta.url).pathname);
 const previousDir = process.env.PI_CODING_AGENT_DIR;
 const dir = mkdtempSync(join(tmpdir(), "input-condense-test-"));
 process.env.PI_CODING_AGENT_DIR = dir;
-after(() => {
+afterAll(() => {
   if (previousDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = previousDir;
   rmSync(dir, { recursive: true, force: true });
 });
 const hooks = {};
-extension({ on: (event, handler) => { hooks[event] = handler; } });
+extension({
+  on: (event, handler) => {
+    hooks[event] = handler;
+  },
+});
 await hooks.session_start({}, { ui: { theme: { fg: (_color, text) => text } } });
 const source = Array.from({ length: 30 }, (_, i) => `메시지 ${i}`).join("\n\n");
 function mouse(overrides = {}) {
   return {
-    type: "click", button: "left", x: 2, y: 1, screenX: 2, screenY: 1,
-    width: 80, height: 4, shift: false, alt: false, ctrl: false, clickCount: 1,
+    type: "click",
+    button: "left",
+    x: 2,
+    y: 1,
+    screenX: 2,
+    screenY: 1,
+    width: 80,
+    height: 4,
+    shift: false,
+    alt: false,
+    ctrl: false,
+    clickCount: 1,
     ...overrides,
   };
 }
@@ -84,9 +82,15 @@ test("short messages and non-primary interactions are not consumed", () => {
   const row = new UserMessageComponent(source);
   row.render(80);
   for (const change of [
-    { type: "press" }, { type: "release" }, { type: "drag" },
-    { type: "wheel", wheelDelta: 1 }, { button: "right" },
-    { shift: true }, { ctrl: true }, { alt: true }, { clickCount: 2 },
+    { type: "press" },
+    { type: "release" },
+    { type: "drag" },
+    { type: "wheel", wheelDelta: 1 },
+    { button: "right" },
+    { shift: true },
+    { ctrl: true },
+    { alt: true },
+    { clickCount: 2 },
   ]) {
     assert.equal(row.handleMouse(mouse(change)), undefined);
     assert.equal(row.render(80).length, 4);

@@ -21,53 +21,54 @@ const CACHE_MS = 250;
  * terminal. The result is cached briefly because this is called for every streaming delta.
  */
 export function terminalColumns(env: NodeJS.ProcessEnv = process.env): number {
-	const now = Date.now();
-	if (cached && now - cached.at < CACHE_MS) return cached.columns;
+  const now = Date.now();
+  if (cached && now - cached.at < CACHE_MS) return cached.columns;
 
-	const override = Number(env.PELE_MERMAID_COLUMNS);
-	let columns = 0;
+  const override = Number(env.PELE_MERMAID_COLUMNS);
+  let columns = 0;
 
-	if (Number.isFinite(override) && override >= 8) {
-		columns = Math.floor(override);
-	}
+  if (Number.isFinite(override) && override >= 8) {
+    columns = Math.floor(override);
+  }
 
-	if (columns === 0) {
-		const live = process.stdout.columns;
-		if (typeof live === "number" && Number.isFinite(live) && live >= 8) columns = Math.floor(live);
-	}
+  if (columns === 0) {
+    const live = process.stdout.columns;
+    if (typeof live === "number" && Number.isFinite(live) && live >= 8) columns = Math.floor(live);
+  }
 
-	if (columns === 0) columns = querySize(env) ?? FALLBACK_COLUMNS;
+  if (columns === 0) columns = querySize(env) ?? FALLBACK_COLUMNS;
 
-	cached = { columns, at: now };
-	return columns;
+  cached = { columns, at: now };
+  return columns;
 }
 
 /** Asks the controlling terminal for its size. Returns undefined when unavailable. */
 function querySize(env: NodeJS.ProcessEnv): number | undefined {
-	const candidates: Array<[string, string[]]> = [
-		["stty", ["size"]],
-		["tput", ["cols"]],
-	];
-	for (const [command, args] of candidates) {
-		try {
-			const output = execFileSync(command, args, {
-				encoding: "utf8",
-				timeout: 500,
-				stdio: ["ignore", "pipe", "ignore"],
-				env,
-			}).trim();
-			// `stty size` prints "ROWS COLS"; `tput cols` prints just the column count.
-			const parts = output.split(/\s+/).map(Number);
-			const value = parts.length === 2 ? parts[1] : parts[0];
-			if (typeof value === "number" && Number.isFinite(value) && value >= 8) return Math.floor(value);
-		} catch {
-			// Try the next source.
-		}
-	}
-	return undefined;
+  const candidates: Array<[string, string[]]> = [
+    ["stty", ["size"]],
+    ["tput", ["cols"]],
+  ];
+  for (const [command, args] of candidates) {
+    try {
+      const output = execFileSync(command, args, {
+        encoding: "utf8",
+        timeout: 500,
+        stdio: ["ignore", "pipe", "ignore"],
+        env,
+      }).trim();
+      // `stty size` prints "ROWS COLS"; `tput cols` prints just the column count.
+      const parts = output.split(/\s+/).map(Number);
+      const value = parts.length === 2 ? parts[1] : parts[0];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 8)
+        return Math.floor(value);
+    } catch {
+      // Try the next source.
+    }
+  }
+  return undefined;
 }
 
 /** Drops the cached size so the next call re-reads the terminal. */
 export function invalidateTerminalColumns(): void {
-	cached = undefined;
+  cached = undefined;
 }

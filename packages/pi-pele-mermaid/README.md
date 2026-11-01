@@ -27,7 +27,7 @@ does in a browser.
   Fullscreen Pi opens it with the platform handler (`open` on macOS); regular terminals use their
   hyperlink gesture, usually Cmd-click. Anchored-image terminals show an `열기` link below the
   image, keeping the reserved image rows genuinely blank.
-- **Lossless.** The model context and the session file keep the original ```` ```mermaid ````
+- **Lossless.** The model context and the session file keep the original ` ```mermaid `
   block. Only the rendered rows are replaced.
 - **Cached.** Streaming deltas reuse raster and encoded lines without re-parsing Pele. Markers
   are stable, one cell wide, and retained only by live Markdown instances and the render cache.
@@ -55,28 +55,28 @@ Registered in `~/.pi/agent/settings.json`:
 ```
 
 On first load the extension sets `markdown.mermaid` to `"off"` in `~/.pi/agent/settings.json`,
-because Pi's built-in Mermaid transformer runs *before* extension transformers and would otherwise
+because Pi's built-in Mermaid transformer runs _before_ extension transformers and would otherwise
 consume the fences. A notification reports the change; restore the setting to undo it.
 
 ## Configuration
 
 `~/.pi/agent/pele-mermaid.json` (created with defaults on first run):
 
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `enabled` | `true` | Master switch. |
-| `mode` | `"auto"` | `"auto"` follows the Pi theme appearance; `"dark"` / `"light"` force it. |
-| `scale` | `2` | Rasterization multiplier, 1–4. Higher is sharper and larger on the wire. |
-| `font` | `"Pretendard"` | Label font. Must be installed locally. |
-| `fontMono` | `"D2Coding"` | Font for monospace labels (class members, ER attributes). |
-| `fontDirs` | `[]` | Extra font directories. Empty scans known system directories. |
-| `streaming` | `true` | Draw while the message is still streaming. |
-| `guidance` | `true` | Append Mermaid-only instructions to the system prompt. |
-| `padding` | `10` | Horizontal padding, in base-size pixels. |
-| `maxColumns` | `0` | Maximum columns. `0` uses all available width. |
-| `fillWidth` | `0.8` | Maximum display width as a fraction of available width. `0.8` leaves roughly 10% on each side; `1` fills the row. Tall or very small diagrams may leave larger margins. |
-| `maxRows` | `40` | Terminal row cap. `0` disables this limit. Anchored placements are additionally limited to 60% of terminal height. |
-| `maxHeightPx` | `4096` | Raster pixel-height cap, 256–8192. If exceeded, reduce raster resolution while retaining the terminal cell box and aspect ratio. The raster also stays within 8192 pixels wide and 16 megapixels total. |
+| Key           | Default        | Meaning                                                                                                                                                                                                 |
+| ------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`     | `true`         | Master switch.                                                                                                                                                                                          |
+| `mode`        | `"auto"`       | `"auto"` follows the Pi theme appearance; `"dark"` / `"light"` force it.                                                                                                                                |
+| `scale`       | `2`            | Rasterization multiplier, 1–4. Higher is sharper and larger on the wire.                                                                                                                                |
+| `font`        | `"Pretendard"` | Label font. Must be installed locally.                                                                                                                                                                  |
+| `fontMono`    | `"D2Coding"`   | Font for monospace labels (class members, ER attributes).                                                                                                                                               |
+| `fontDirs`    | `[]`           | Extra font directories. Empty scans known system directories.                                                                                                                                           |
+| `streaming`   | `true`         | Draw while the message is still streaming.                                                                                                                                                              |
+| `guidance`    | `true`         | Append Mermaid-only instructions to the system prompt.                                                                                                                                                  |
+| `padding`     | `10`           | Horizontal padding, in base-size pixels.                                                                                                                                                                |
+| `maxColumns`  | `0`            | Maximum columns. `0` uses all available width.                                                                                                                                                          |
+| `fillWidth`   | `0.8`          | Maximum display width as a fraction of available width. `0.8` leaves roughly 10% on each side; `1` fills the row. Tall or very small diagrams may leave larger margins.                                 |
+| `maxRows`     | `40`           | Terminal row cap. `0` disables this limit. Anchored placements are additionally limited to 60% of terminal height.                                                                                      |
+| `maxHeightPx` | `4096`         | Raster pixel-height cap, 256–8192. If exceeded, reduce raster resolution while retaining the terminal cell box and aspect ratio. The raster also stays within 8192 pixels wide and 16 megapixels total. |
 
 `PELE_MERMAID_BACKGROUND` overrides the detected terminal background (for example `#1e1e2e`).
 
@@ -127,7 +127,7 @@ Unicode placeholders avoid the problem entirely. The image is transmitted with `
 drawn by printing one placeholder character per cell, with combining diacritics encoding the row
 and column. The foreground color identifies the image; optional underline-color IDs are deliberately
 omitted because Pi's ANSI tracker can misread their RGB channels as background commands during
-scrollbar/overlay composition. Each image row starts and ends with a full SGR reset. Because the drawing *is* text, it scrolls with the transcript and is re-emitted on
+scrollbar/overlay composition. Each image row starts and ends with a full SGR reset. Because the drawing _is_ text, it scrolls with the transcript and is re-emitted on
 every redraw — an anchored placement would be deleted as soon as it left the viewport. Terminals
 that implement the protocol without placeholders (iTerm2, Warp) fall back to anchored rows.
 

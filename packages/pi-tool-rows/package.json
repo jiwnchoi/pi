@@ -2,12 +2,12 @@
   "name": "@jiwnchoi/pi-tool-rows",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "Compact expandable tool rows for Pi.",
   "keywords": [
-    "pi-package",
-    "pi-extension"
+    "pi-extension",
+    "pi-package"
   ],
+  "type": "module",
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"

@@ -55,7 +55,11 @@ export default function (pi: ExtensionAPI) {
         },
       );
 
-      if (response.stopReason === "error" || response.stopReason === "length" || response.stopReason === "aborted") {
+      if (
+        response.stopReason === "error" ||
+        response.stopReason === "length" ||
+        response.stopReason === "aborted"
+      ) {
         return;
       }
 
@@ -68,7 +72,9 @@ export default function (pi: ExtensionAPI) {
       // Do not persist empty or tool-calling responses; fall back to Pi's normal summarizer.
       if (!summary || response.content.some((block) => block.type === "toolCall")) return;
 
-      const modifiedFiles = [...new Set([...preparation.fileOps.written, ...preparation.fileOps.edited])].sort();
+      const modifiedFiles = [
+        ...new Set([...preparation.fileOps.written, ...preparation.fileOps.edited]),
+      ].sort();
       const modified = new Set(modifiedFiles);
       const readFiles = [...preparation.fileOps.read].filter((path) => !modified.has(path)).sort();
       let summaryWithFiles = summary;

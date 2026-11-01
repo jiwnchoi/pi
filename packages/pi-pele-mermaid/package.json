@@ -2,21 +2,29 @@
   "name": "@jiwnchoi/pi-pele-mermaid",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
   "description": "Render Mermaid diagrams in the Pi transcript with Pele, as high-resolution terminal graphics that honor the terminal background.",
-  "keywords": ["pi-package", "pi-extension", "mermaid", "pele", "diagram"],
+  "keywords": [
+    "diagram",
+    "mermaid",
+    "pele",
+    "pi-extension",
+    "pi-package"
+  ],
+  "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test test/*.test.ts"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "pele": "^1.12.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
     "@earendil-works/pi-tui": "*"
   },
-  "dependencies": {
-    "pele": "^1.12.0",
-    "@resvg/resvg-js": "^2.6.2"
-  },
   "pi": {
-    "extensions": ["./extensions/pele-mermaid.ts"]
+    "extensions": [
+      "./extensions/pele-mermaid.ts"
+    ]
   }
 }

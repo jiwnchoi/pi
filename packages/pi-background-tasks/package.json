@@ -1,38 +1,36 @@
 {
   "name": "@jiwnchoi/pi-background-tasks",
   "version": "2.6.10-local.1",
+  "private": true,
   "description": "Pi extension for durable background shell tasks, read-only delegated agents, local attested Pi runs, and fixed-purpose Fusion workflows through child Pi processes.",
-  "type": "module",
-  "license": "ISC",
-  "author": "Ismail <ismailsalikhodjaev@gmail.com>",
   "keywords": [
-    "pi-package",
-    "pi-extension",
-    "pi",
+    "attestation",
     "background-tasks",
     "coding-agent",
-    "shell",
-    "tasks",
     "delegate",
-    "attestation",
     "fusion",
-    "reason",
     "investigate",
-    "research",
     "multi-model",
+    "pi",
+    "pi-dev",
+    "pi-extension",
+    "pi-package",
+    "reason",
+    "research",
+    "shell",
     "task-manager",
-    "pi-dev"
+    "tasks"
   ],
+  "license": "ISC",
+  "author": "Ismail <ismailsalikhodjaev@gmail.com>",
   "files": [
     "dist/",
     "README.md",
     "LICENSE"
   ],
-  "pi": {
-    "extensions": [
-      "./dist/extensions/anthropic-attribution.js",
-      "./dist/extensions/background-tasks.js"
-    ]
+  "type": "module",
+  "dependencies": {
+    "turndown": "7.2.4"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",
@@ -43,8 +41,10 @@
   "engines": {
     "node": ">=22.19.0"
   },
-  "dependencies": {
-    "turndown": "7.2.4"
-  },
-  "private": true
+  "pi": {
+    "extensions": [
+      "./dist/extensions/anthropic-attribution.js",
+      "./dist/extensions/background-tasks.js"
+    ]
+  }
 }

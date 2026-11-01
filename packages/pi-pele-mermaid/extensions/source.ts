@@ -13,18 +13,21 @@
  * always valid, so the axis is normalized unconditionally.
  */
 function quoteXychartAxes(source: string): string {
-	return source.replace(/^(\s*(?:x-axis|y-axis)\s*\[)([\s\S]*?)(\]\s*)$/gm, (match, head: string, body: string, tail: string) => {
-		const parts = body.split(",");
-		const quoted = parts.map((part) => {
-			const value = part.trim();
-			if (value === "") return value;
-			// Already a quoted string, or a bare number/keyword the parser accepts.
-			if (/^".*"$/.test(value) || /^'.*'$/.test(value)) return value;
-			if (/^-?\d+(?:\.\d+)?$/.test(value)) return value;
-			return `"${value.replace(/"/g, '\\"')}"`;
-		});
-		return `${head}${quoted.join(", ")}${tail}`;
-	});
+  return source.replace(
+    /^(\s*(?:x-axis|y-axis)\s*\[)([\s\S]*?)(\]\s*)$/gm,
+    (match, head: string, body: string, tail: string) => {
+      const parts = body.split(",");
+      const quoted = parts.map((part) => {
+        const value = part.trim();
+        if (value === "") return value;
+        // Already a quoted string, or a bare number/keyword the parser accepts.
+        if (/^".*"$/.test(value) || /^'.*'$/.test(value)) return value;
+        if (/^-?\d+(?:\.\d+)?$/.test(value)) return value;
+        return `"${value.replace(/"/g, '\\"')}"`;
+      });
+      return `${head}${quoted.join(", ")}${tail}`;
+    },
+  );
 }
 
 /**
@@ -33,12 +36,12 @@ function quoteXychartAxes(source: string): string {
  * the series and its colors, which is far more useful than a parse failure.
  */
 function dropXychartSeriesNames(source: string): string {
-	return source.replace(/^(\s*(?:line|bar)\s+)(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s+/gm, "$1");
+  return source.replace(/^(\s*(?:line|bar)\s+)(?:"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\s+/gm, "$1");
 }
 
 /** Applies every known recovery for the given diagram source. */
 export function normalizeSource(source: string): string {
-	const head = /^\s*xychart(-beta)?\b/i.test(source);
-	if (!head) return source;
-	return dropXychartSeriesNames(quoteXychartAxes(source));
+  const head = /^\s*xychart(-beta)?\b/i.test(source);
+  if (!head) return source;
+  return dropXychartSeriesNames(quoteXychartAxes(source));
 }
