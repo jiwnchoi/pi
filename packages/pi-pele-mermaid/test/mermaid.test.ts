@@ -491,7 +491,8 @@ test("click snapshots are stable file URLs and preserve anchored blank rows", ()
   const linked = linkImageLines(["IMAGE", "", ""], url, 0, false);
   assert.equal(linked[1], "");
   assert.equal(linked[2], "");
-  assert(linked[3]!.includes(url));
+  assert.equal(linked.length, 4);
+  assert.equal(linked[3], `\x1b]8;;${url}\x1b\\Open SVG\x1b]8;;\x1b\\`);
   const virtual = linkImageLines(["IMAGE", "PLACEHOLDERS"], url, 0, true);
   assert(virtual.every((line) => line.includes(url)));
 });

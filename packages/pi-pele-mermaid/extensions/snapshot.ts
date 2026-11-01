@@ -36,7 +36,6 @@ export function linkImageLines(
   const start = `\x1b]8;;${url}\x1b\\`;
   const end = "\x1b]8;;\x1b\\";
   if (placeholders) return lines.map((line) => `${start}${line}${end}`);
-  // Anchored image rows must remain genuinely blank for Pi's reservation scanner. A small
-  // link below the image is reliable on these terminals; filling the blanks breaks scrolling.
-  return [...lines, `${" ".repeat(left)}${start}열기${end}`];
+  // Anchored image rows must remain empty for Pi's viewport clipping and scrollback scanner.
+  return [...lines, `${" ".repeat(left)}${start}Open SVG${end}`];
 }

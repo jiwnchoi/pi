@@ -25,8 +25,9 @@ does in a browser.
 - **Click to open.** Placeholder image cells link to a local SVG original saved in light mode
   on an opaque white background, independently of the terminal display theme.
   Fullscreen Pi opens it with the platform handler (`open` on macOS); regular terminals use their
-  hyperlink gesture, usually Cmd-click. Anchored-image terminals show an `열기` link below the
-  image, keeping the reserved image rows genuinely blank.
+  hyperlink gesture, usually Cmd-click. Anchored-image terminals (including Herdr, Rex, Warp,
+  and iTerm2) show an `Open SVG` link below the image, keeping the reserved rows blank for
+  viewport clipping and scrolling.
 - **Lossless.** The model context and the session file keep the original ` ```mermaid `
   block. Only the rendered rows are replaced.
 - **Cached.** Streaming deltas reuse raster and encoded lines without re-parsing Pele. Markers
