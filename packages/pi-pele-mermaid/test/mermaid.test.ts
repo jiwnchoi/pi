@@ -72,7 +72,7 @@ const theme = Object.fromEntries(
     "underline",
   ].map((key) => [key, (s: string) => s]),
 ) as any;
-const source = 'flowchart TD\nA["시작"] --> B["완료"]';
+const source = 'flowchart TD\nA["开始"] --> B["完成"]';
 const fence = `\`\`\`mermaid\n${source}\n\`\`\``;
 const placement = {
   columns: 8,
@@ -327,7 +327,7 @@ test("scrollbar/overlay slicing cannot reinterpret image IDs as red backgrounds"
         assert.equal(getActiveBackgroundAnsi(clipped), "");
         assert(!clipped.includes("\x1b[101m"));
       }
-      const overlay = compositeTuiLine(row, "\x1b[48;2;37;38;42m최신 메시지\x1b[0m", 5, 12, 24);
+      const overlay = compositeTuiLine(row, "\x1b[48;2;37;38;42m最新消息\x1b[0m", 5, 12, 24);
       assert(!overlay.includes("\x1b[101m"));
     }
   } finally {
@@ -389,7 +389,7 @@ test("Herdr caps decoded RGBA without changing the displayed cell box", () => {
   }
   setCellDimensions({ widthPx: 14, heightPx: 28 });
   const chart =
-    'xychart-beta\nx-axis ["1월", "2월", "3월", "4월", "5월", "6월"]\ny-axis 0 --> 100\nbar [22,31,45,58,71,88]\nline [22,31,45,58,71,88]';
+    'xychart-beta\nx-axis ["1月", "2月", "3月", "4月", "5月", "6月"]\ny-axis 0 --> 100\nbar [22,31,45,58,71,88]\nline [22,31,45,58,71,88]';
   for (const maxColumns of [80, 102, 210]) {
     const input = {
       ...options,
@@ -419,8 +419,8 @@ test("Herdr caps decoded RGBA without changing the displayed cell box", () => {
 test("80% width cap applies to wide charts as well as narrow diagrams", () => {
   setCellDimensions({ widthPx: 9, heightPx: 18 });
   const chart =
-    'xychart-beta\nx-axis ["1월", "2월", "3월", "4월", "5월", "6월"]\ny-axis 0 --> 300\nbar [120, 180, 210, 240, 260, 300]\nline [40, 65, 80, 95, 110, 130]';
-  for (const source of [chart, 'flowchart LR\nA["요청"] --> B["처리"] --> C["응답"]']) {
+    'xychart-beta\nx-axis ["1月", "2月", "3月", "4月", "5月", "6月"]\ny-axis 0 --> 300\nbar [120, 180, 210, 240, 260, 300]\nline [40, 65, 80, 95, 110, 130]';
+  for (const source of [chart, 'flowchart LR\nA["请求"] --> B["处理"] --> C["响应"]']) {
     const raster = rasterize(source, { ...options, maxColumns: 100, fillWidth: 0.8, maxRows: 0 });
     assert(raster);
     assert(raster.columns <= 80, `expected at most 80 columns, got ${raster.columns}`);
@@ -442,7 +442,7 @@ test("row and column limits both hold for wide/tall graphs", () => {
 
 test("normalizes Korean xychart labels before Pele parsing", () => {
   const raster = rasterize(
-    'xychart-beta\nx-axis [1월, 2월]\ny-axis 0 --> 10\nline "판매" [3, 7]',
+    'xychart-beta\nx-axis [1月, 2月]\ny-axis 0 --> 10\nline "销售" [3, 7]',
     options,
   );
   assert(raster);
@@ -462,7 +462,7 @@ test("iTerm2 still receives PNG", () => {
 test("saved SVGs stay opaque light mode while terminal rasters follow their appearance", () => {
   for (const diagram of [
     source,
-    'xychart-beta\nx-axis ["1월", "2월"]\ny-axis 0 --> 10\nline [3,7]',
+    'xychart-beta\nx-axis ["1月", "2月"]\ny-axis 0 --> 10\nline [3,7]',
   ]) {
     const dark = rasterize(diagram, { ...options, appearance: "dark", background: "#181825" });
     const light = rasterize(diagram, { ...options, appearance: "light", background: "#fff1e6" });
@@ -483,7 +483,7 @@ test("saved SVGs stay opaque light mode while terminal rasters follow their appe
 });
 
 test("click snapshots are stable file URLs and preserve anchored blank rows", () => {
-  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>한글</text></svg>';
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>中文</text></svg>';
   const url = saveSnapshot(svg);
   assert(url);
   assert.equal(saveSnapshot(svg), url);
@@ -510,7 +510,7 @@ test("Herdr extension applies the decoded byte cap and separates terminal render
     },
   } as unknown as ExtensionAPI);
   const chartFence =
-    '```mermaid\nxychart-beta\nx-axis ["1월", "2월", "3월", "4월", "5월", "6월"]\ny-axis 0 --> 100\nline [22,31,45,58,71,88]\n```';
+    '```mermaid\nxychart-beta\nx-axis ["1月", "2月", "3月", "4月", "5月", "6月"]\ny-axis 0 --> 100\nline [22,31,45,58,71,88]\n```';
   const md = new Markdown(chartFence, 1, 0, theme, undefined, {
     transform: (text, availableWidth) =>
       transform(text, { availableWidth, messageType: "assistant", isStreaming: false }),

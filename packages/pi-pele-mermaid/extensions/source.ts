@@ -9,7 +9,7 @@
 /**
  * `xychart-beta` axis labels must be quoted when they are not bare ASCII words.
  *
- * Mermaid accepts `x-axis [1월, 2월]`, Pele raises "Lexical error" on it. Quoting every label is
+ * Mermaid accepts `x-axis [janvier, février]`, Pele raises "Lexical error" on it. Quoting every label is
  * always valid, so the axis is normalized unconditionally.
  */
 function quoteXychartAxes(source: string): string {

@@ -28,7 +28,7 @@ extension({
   },
 });
 await hooks.session_start({}, { ui: { theme: { fg: (_color, text) => text } } });
-const source = Array.from({ length: 30 }, (_, i) => `메시지 ${i}`).join("\n\n");
+const source = Array.from({ length: 30 }, (_, i) => `消息 ${i}`).join("\n\n");
 function mouse(overrides = {}) {
   return {
     type: "click",
@@ -76,7 +76,7 @@ test("Ctrl+O state and per-message click state compose", () => {
 });
 
 test("short messages and non-primary interactions are not consumed", () => {
-  const short = new UserMessageComponent("짧은 메시지");
+  const short = new UserMessageComponent("短消息");
   short.render(80);
   assert.equal(short.handleMouse(mouse()), undefined);
   const row = new UserMessageComponent(source);

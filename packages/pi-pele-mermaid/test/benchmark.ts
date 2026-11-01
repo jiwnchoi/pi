@@ -22,7 +22,7 @@ try {
     },
   } as unknown as ExtensionAPI);
   const source =
-    'flowchart TD\nA["요청 수신"] --> B["캐시 확인"]\nB --> C["이미지 렌더"]\nC --> D["화면 표시"]';
+    'flowchart TD\nA["请求接收"] --> B["缓存检查"]\nB --> C["图像渲染"]\nC --> D["画面显示"]';
   const markdown = `\`\`\`mermaid\n${source}\n\`\`\``;
   const context = { messageType: "assistant", isStreaming: true, availableWidth: 80 };
   const run = (name: string, count: number, fn: () => unknown) => {
@@ -33,7 +33,7 @@ try {
   run("first render (raw+zlib, selected fonts, snapshot)", 1, () => transform(markdown, context));
   run("previous detect-on-cache-hit work alone", 100, () => detect(source));
   run("optimized complete cached transformer", 100, () => transform(markdown, context));
-  run("no-diagram fast path", 10000, () => transform("일반 응답 텍스트", context));
+  run("no-diagram fast path", 10000, () => transform("普通响应文本", context));
   const fontDir = join(homedir(), "Library", "Fonts");
   let allFonts: string[] = [];
   try {

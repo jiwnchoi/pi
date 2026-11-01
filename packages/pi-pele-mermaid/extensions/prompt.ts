@@ -19,6 +19,6 @@ export const DIAGRAM_SECTION = [
   "- Keep nodes and labels short. The diagram is rasterized at terminal size, so wide graphs shrink their own text.",
   "- Prefer one focused diagram over one crowded diagram. Split a large system into several Mermaid blocks with a sentence of prose between them.",
   "- A plain bulleted list is still better than a diagram when the content is not relational. Do not force a diagram onto simple prose.",
-  '- Quote node labels that contain spaces, punctuation, parentheses, or non-ASCII text: `A["요청 처리"]`, `x-axis ["1월", "2월"]`. Unquoted labels are the most common parse failure.',
+  '- Quote node labels that contain spaces, punctuation, parentheses, or non-ASCII text: `A["Process request"]`, `x-axis ["janvier", "février"]`. Unquoted labels are the most common parse failure.',
   "- Keep each diagram inside the row budget. A very tall flowchart is better split into two linked diagrams than drawn as one 100-row column.",
 ].join("\n");
