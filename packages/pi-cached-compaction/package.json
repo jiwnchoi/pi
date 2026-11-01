@@ -1,0 +1,20 @@
+{
+  "name": "@jiwnchoi/pi-cached-compaction",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Context checkpoint compaction for Pi.",
+  "keywords": [
+    "pi-package",
+    "pi-extension"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/cached-compaction.ts"
+    ]
+  }
+}

@@ -81,6 +81,8 @@ out
 # Nuxt.js build / generate output
 .nuxt
 dist
+!packages/pi-background-tasks/dist/
+!packages/pi-background-tasks/dist/**
 .output
 
 # Gatsby files

@@ -1,0 +1,15 @@
+{
+  "name": "@jiwnchoi/pi-input-condense",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Collapse long pasted user messages in the Pi transcript. Ctrl+O expands. Execution and the model-facing transcript are unchanged.",
+  "keywords": ["pi-package", "pi-extension"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions/input-condense.ts"]
+  }
+}

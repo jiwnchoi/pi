@@ -1,0 +1,15 @@
+{
+  "name": "@jiwnchoi/pi-instant-steer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Codex's instant_interrupt behavior for Pi: interrupting a working turn sends the queued steering input immediately instead of dropping it back into the editor.",
+  "keywords": ["pi-package", "pi-extension", "steering", "interrupt"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions/instant_steer.ts"]
+  }
+}

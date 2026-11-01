@@ -1,0 +1,15 @@
+{
+  "name": "@jiwnchoi/pi-artifact",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Use Claude Code's Artifact tool from Pi.",
+  "keywords": ["pi-package", "pi-extension", "artifact"],
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": ["./extensions/artifact.ts"]
+  }
+}

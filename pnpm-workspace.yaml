@@ -1,0 +1,7 @@
+packages:
+  - packages/*
+
+# Do not run optional dependency lifecycle scripts.
+allowBuilds:
+  '@google/genai': false
+  protobufjs: false
