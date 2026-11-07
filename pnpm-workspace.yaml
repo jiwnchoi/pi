@@ -6,3 +6,4 @@ allowBuilds:
   "@google/genai": false
   protobufjs: false
   lefthook: true
+  node-pty: true

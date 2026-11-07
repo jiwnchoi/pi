@@ -12,4 +12,5 @@ All extensions are tested in [pi](https://github.com/badlogic/pi-mono) and [pi-b
 - [`@jiwnchoi/pi-input-condense`](packages/pi-input-condense)
 - [`@jiwnchoi/pi-instant-steer`](packages/pi-instant-steer)
 - [`@jiwnchoi/pi-background-tasks`](packages/pi-background-tasks)
+- [`@jiwnchoi/pirex-tasks`](packages/pirex-tasks) — asynchronous Rex shells, interactive popups, Pi agents and codemode workflows
 - [`@jiwnchoi/pi-pele-mermaid`](packages/pi-pele-mermaid)

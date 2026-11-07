@@ -1,0 +1,46 @@
+{
+  "name": "@jiwnchoi/pirex-tasks",
+  "version": "0.1.0",
+  "description": "Asynchronous Rex tasks, interactive terminals, Pi agents and codemode workflows",
+  "keywords": [
+    "pi-extension",
+    "pi-package",
+    "rex"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsrs --noEmit -p tsconfig.json",
+    "test": "vitest run test",
+    "lint": "oxlint --deny-warnings extensions lib runner test",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check ."
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0",
+    "smol-toml": "^1.9.1",
+    "ws": "^8.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "tsrs": "0.22.0-ts7.1.0-beta",
+    "typebox": "^1.4.4",
+    "vitest": "^5.1.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "^1.4.4"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/index.ts"
+    ]
+  }
+}

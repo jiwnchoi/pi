@@ -1,0 +1,6 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "allowJs": false },
+  "include": ["extensions/**/*.ts", "lib/**/*.ts", "runner/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules"]
+}
