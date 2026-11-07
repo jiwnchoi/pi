@@ -9,6 +9,11 @@
     "strict": true,
     "types": ["node"]
   },
-  "include": ["packages/*/extensions/**/*.ts", "packages/*/test/**/*.ts"],
+  "include": [
+    "packages/*/extensions/**/*.ts",
+    "packages/*/lib/**/*.ts",
+    "packages/*/runner/**/*.ts",
+    "packages/*/test/**/*.ts"
+  ],
   "exclude": ["**/dist", "**/node_modules"]
 }

@@ -1,9 +1,13 @@
 pre-commit:
-  parallel: true
+  piped: true
   jobs:
-    - name: lint
-      run: pnpm lint
-    - name: format
-      run: pnpm format:check
-    - name: typecheck
+    - name: oxlint
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
+      run: pnpm exec oxlint --fix {staged_files}
+      stage_fixed: true
+    - name: oxfmt
+      glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,json,jsonc,md,yml,yaml,toml,css,scss,html,vue,svelte}"
+      run: pnpm exec oxfmt {staged_files}
+      stage_fixed: true
+    - name: tsrs
       run: pnpm typecheck

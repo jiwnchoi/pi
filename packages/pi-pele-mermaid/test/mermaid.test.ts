@@ -234,11 +234,14 @@ test("Kitty uses zlib RGBA metadata and reconstructible chunk payloads", () => {
   const sequence = block.lines[0]!;
   assert(sequence.includes("f=32,o=z,s=216,v=180"));
   assert(!sequence.includes("f=100"));
-  const commands = [...sequence.matchAll(/\x1b_G([^;]*);([^\x1b]*)\x1b\\/g)];
-  assert.equal(commands.map((match) => match[2]).join(""), base64);
-  assert(commands[0]![1]!.includes("m=1"));
-  assert(commands.at(-1)![1]!.includes("m=0"));
-  assert(commands.every((match) => match[2]!.length <= 4096));
+  const commands = sequence
+    .split("\x1b_G")
+    .slice(1)
+    .map((frame) => frame.split("\x1b\\")[0]!.split(";"));
+  assert.equal(commands.map((command) => command[1]).join(""), base64);
+  assert(commands[0]![0]!.includes("m=1"));
+  assert(commands.at(-1)![0]!.includes("m=0"));
+  assert(commands.every((command) => command[1]!.length <= 4096));
 });
 
 test("anchored images clip above the editor and survive scrolling past their anchor", () => {
@@ -558,7 +561,12 @@ test("extension reload command preserves cached transcript diagrams; cell change
   });
   const first = md.render(60);
   assert(first.some((line) => line.includes("f=32,o=z")));
-  const snapshotUrl = /\x1b\]8;;(file:[^\x1b]+)\x1b\\/.exec(first.join("\n"))?.[1];
+  const snapshotUrl = first
+    .join("\n")
+    .split("\x1b]8;;")
+    .slice(1)
+    .map((part) => part.split("\x1b\\")[0]!)
+    .find((url) => url.startsWith("file:"));
   assert(snapshotUrl);
   const savedSvg = readFileSync(fileURLToPath(snapshotUrl), "utf8");
   assert(savedSvg.includes('<rect width="100%" height="100%" fill="#ffffff"/>'));

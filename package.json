@@ -11,18 +11,18 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsrs --noEmit",
-    "lint": "oxlint",
-    "format": "oxfmt",
-    "format:check": "oxfmt --check",
+    "typecheck": "tsrs --noEmit -p tsconfig.json",
+    "lint": "oxlint .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
     "prepare": "lefthook install"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "lefthook": "^2.2.2",
-    "oxfmt": "^0.75.0",
-    "oxlint": "^1.90.0",
-    "tsrs": "0.20.1-ts7.1.0-beta",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "tsrs": "0.22.0-ts7.1.0-beta",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   },
