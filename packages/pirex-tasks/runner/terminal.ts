@@ -96,7 +96,7 @@ export function startTerminal({
 }): TerminalHandle {
   return startPty({
     file: spec.config.execution.shell,
-    args: [...spec.config.execution.shell_args, spec.command || ""],
+    args: ["-l", ...spec.config.execution.shell_args, spec.command || ""],
     cwd: spec.cwd,
     output,
     completed,

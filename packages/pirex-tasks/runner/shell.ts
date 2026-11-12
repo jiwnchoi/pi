@@ -37,7 +37,7 @@ export function startPersistentShell({
     completed(code, snapshot);
   };
   const script =
-    'status_file=$1; user_shell=$2; shift 2\n"$@"\ncode=$?\nprintf "%s\\n" "$code" > "$status_file"\nexec "$user_shell" -i';
+    'status_file=$1; user_shell=$2; shift 2\n"$@"\ncode=$?\nprintf "%s\\n" "$code" > "$status_file"\nexec "$user_shell" -li';
   const pty = startPty({
     file: "/bin/sh",
     args: [
@@ -47,6 +47,7 @@ export function startPersistentShell({
       status,
       spec.config.execution.shell,
       spec.config.execution.shell,
+      "-l",
       ...spec.config.execution.shell_args,
       spec.command || "",
     ],

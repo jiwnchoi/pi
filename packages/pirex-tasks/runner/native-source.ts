@@ -209,7 +209,7 @@ try {
   else if (task.kind === "shell") {
     launch(
       spec.config.execution.shell,
-      [...spec.config.execution.shell_args, spec.command || ""],
+      ["-l", ...spec.config.execution.shell_args, spec.command || ""],
       process.env,
       (code, signal) => {
         void snapshot()
@@ -222,7 +222,7 @@ try {
               resultPath,
             );
             if (spec.persistentShell && !shuttingDown)
-              launch(spec.config.execution.shell, ["-i"], process.env, () => cleanup());
+              launch(spec.config.execution.shell, ["-li"], process.env, () => cleanup());
             else cleanup();
           })
           .catch((error) => {
@@ -234,7 +234,7 @@ try {
               row.log_path,
             );
             if (spec.persistentShell && !shuttingDown)
-              launch(spec.config.execution.shell, ["-i"], process.env, () => cleanup());
+              launch(spec.config.execution.shell, ["-li"], process.env, () => cleanup());
             else cleanup();
           });
       },
