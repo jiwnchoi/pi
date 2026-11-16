@@ -37,6 +37,24 @@ else
   exec "$pirex_executable" "$@"
 fi`;
 }
+export function agentArgs(spec: TaskSpec, sessionPath: string, systemPath: string): string[] {
+  const agent = spec.agent;
+  if (!agent?.provider || !agent.model) throw new Error("Agent model settings missing");
+  const args = [
+    "--session",
+    sessionPath,
+    "-e",
+    fileURLToPath(new URL("./agent-bridge.ts", import.meta.url)),
+    "--provider",
+    agent.provider,
+    "--model",
+    agent.model,
+  ];
+  if (agent.thinking !== undefined) args.push("--thinking", agent.thinking);
+  args.push("--append-system-prompt", systemPath);
+  if (agent.tools) args.push("--tools", agent.tools.join(","));
+  return args;
+}
 export function startAgent({
   store,
   row,
@@ -49,28 +67,11 @@ export function startAgent({
     "SELECT path FROM agent_sessions WHERE task_id=?",
     row.task_id,
   );
-  const agent = spec.agent;
-  if (!agent?.provider || !agent.model) throw new Error("Agent model settings missing");
   const systemPath = join(dirname(row.log_path), "system-prompt.md");
   const eventsPath = join(dirname(row.log_path), "native-events.jsonl");
   const resultPath = join(dirname(row.log_path), "result.txt");
-  const bridgePath = fileURLToPath(new URL("./agent-bridge.ts", import.meta.url));
   writeFileSync(systemPath, spec.systemPrompt || "", { mode: 0o600 });
-  const args = [
-    "--session",
-    session.path,
-    "-e",
-    bridgePath,
-    "--provider",
-    agent.provider,
-    "--model",
-    agent.model,
-    "--thinking",
-    agent.thinking || "off",
-    "--append-system-prompt",
-    systemPath,
-  ];
-  if (agent.tools) args.push("--tools", agent.tools.join(","));
+  const args = agentArgs(spec, session.path, systemPath);
   const runtime = spec.config.agent_runtime;
   const zsh = basename(runtime.bootstrap_shell) === "zsh";
   // -f suppresses automatic RC loading; source once, quietly, then expand pi's alias at eval time.

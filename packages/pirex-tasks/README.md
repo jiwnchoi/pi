@@ -123,11 +123,43 @@ return await tools.task_agent({
 });
 ```
 
-Profiles are optional: direct provider/model/tools settings are supported.
-Provider, model and thinking otherwise inherit from the parent at submission time.
-The child's own saved session is used for resume. A new run records each attempt;
-old results are not overwritten. `inheritContext` is opt-in and passes a bounded
-snapshot as reference data. This is not an exact fork of the parent's full session.
+Profiles are optional: direct provider/model/thinking/tools settings are supported.
+For **both new and resumed runs**, each of `provider`, `model` and `thinking` is
+resolved independently, in this order (highest priority first):
+
+1. Explicit settings on this `task_agent` call.
+2. Settings in the profile explicitly selected on this call.
+3. The **current invoking parent session**, captured at submission time, not
+   extension startup or eventual execution time.
+
+A profile can intentionally pin any of these settings; omitted profile fields
+still inherit from the current parent. On resume, an old profile is **not**
+automatically reselected and the previous run's model settings are not defaults.
+Pass `profile` again to apply its current settings. Background workflow children
+inherit the parent's settings captured when that workflow was submitted.
+
+`model` is an **exact model ID within `provider`**, not a fuzzy pattern or a
+`provider/model:thinking` shortcut. IDs containing `/` are passed unchanged.
+Overriding only `model` keeps the resolved provider; overriding only `provider`
+keeps the resolved model ID. Supply both when changing providers if that model ID
+is not available there. No provider is guessed or substituted. Missing parent
+provider/model requires explicit settings (or a profile). The child checks the
+exact pair after session restoration and reapplies the admitted model and thinking
+before sending its prompt, so saved settings and shell-alias defaults cannot
+silently replace them. Unavailable models/authentication fail rather than falling
+back. Pi still clamps thinking to the chosen model's real capabilities; this
+extension does not change model metadata or user defaults.
+
+The child's own saved session is used for resume, preserving conversation and
+other session state. Its working directory, runtime configuration snapshot, tool
+allowlist, saved system prompt and parent reference snapshot are retained unless
+applicable settings are explicitly replaced. A newly selected profile overrides
+saved tools/system-prompt/reference options; explicit `tools` and `inheritContext`
+override the profile. An explicitly enabled `inheritContext` (directly or through
+a selected profile) captures a fresh bounded parent reference; otherwise resume
+keeps the saved reference, or omits it when explicitly disabled. A new run records
+each attempt; old results are not overwritten. `inheritContext` is opt-in for new
+runs. This is not an exact fork of the parent's full session.
 
 The terminal contains the **actual native Pi TUI running in a real PTY**. Input and terminal resize go directly to Pi. The internal extension reports lifecycle and steering acknowledgements through private files/SQLite. The child's configured extensions, MCP servers, skills and prompt templates load normally. Its delegated turn reports completion once; subsequent user-entered turns stay in the same saved Pi session without overwriting the original task result. The `agents.allow_nested` setting is retained for configuration compatibility and is not enforced. Tool allowlists are capability conveniences, not OS sandboxes.
 

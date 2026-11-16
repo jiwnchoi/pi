@@ -2,7 +2,6 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { Worker } from "node:worker_threads";
 import { appendFileSync, writeFileSync, openSync, readSync, closeSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
-import { fileURLToPath } from "node:url";
 import { StringDecoder } from "node:string_decoder";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
@@ -16,7 +15,7 @@ import {
   type TaskKind,
   type TaskState,
 } from "../lib/types.ts";
-import { agentCommand } from "./agent.ts";
+import { agentArgs, agentCommand } from "./agent.ts";
 const [root, runId] = process.argv.slice(2);
 if (!root || !runId) throw new Error("Usage: native-source.ts ROOT RUN");
 process.umask(0o077);
@@ -240,29 +239,13 @@ try {
       },
     );
   } else if (task.kind === "agent") {
-    const agent = spec.agent;
-    if (!agent?.provider || !agent.model) throw new Error("Agent model missing");
     const session = store.required<{ path: string }>(
       "SELECT path FROM agent_sessions WHERE task_id=?",
       row.task_id,
     );
     const systemPath = join(dirname(row.log_path), "system-prompt.md");
     writeFileSync(systemPath, spec.systemPrompt || "", { mode: 0o600 });
-    const args = [
-      "--session",
-      session.path,
-      "-e",
-      fileURLToPath(new URL("./agent-bridge.ts", import.meta.url)),
-      "--provider",
-      agent.provider,
-      "--model",
-      agent.model,
-      "--thinking",
-      agent.thinking || "off",
-      "--append-system-prompt",
-      systemPath,
-    ];
-    if (agent.tools) args.push("--tools", agent.tools.join(","));
+    const args = agentArgs(spec, session.path, systemPath);
     const runtime = spec.config.agent_runtime;
     launch(
       runtime.bootstrap_shell,

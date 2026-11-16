@@ -131,29 +131,30 @@ export class Runtime {
         const old = this.store.task(this.owner, resume);
         const oldSpec = parseSpec(old);
         resumeRunId = old.run_id;
-        settings = oldSpec.agent;
+        settings = { ...oldSpec.agent };
         systemPrompt = oldSpec.systemPrompt;
         cwd = oldSpec.cwd;
         runConfig = oldSpec.config;
         inheritedContext = oldSpec.context;
-      } else {
-        const profile = input.profile ? this.config.agents.profiles?.[input.profile] : {};
-        if (!profile) throw new Error(`Unknown user-defined agent profile: ${input.profile}`);
-        settings = {
-          provider: this.context.provider,
-          model: this.context.model,
-          thinking: this.context.thinking,
-          ...profile,
-        };
-        for (const key of ["provider", "model", "thinking"] as const)
-          if (input[key] !== undefined) settings[key] = input[key];
-        if (input.tools !== undefined) settings.tools = input.tools;
+      }
+      const profile = input.profile ? this.config.agents.profiles?.[input.profile] : {};
+      if (!profile) throw new Error(`Unknown user-defined agent profile: ${input.profile}`);
+      settings = {
+        ...settings,
+        ...profile,
+        provider: input.provider ?? profile.provider ?? this.context.provider,
+        model: input.model ?? profile.model ?? this.context.model,
+        thinking: input.thinking ?? profile.thinking ?? this.context.thinking,
+      };
+      if (input.tools !== undefined) settings.tools = input.tools;
+      if (!resume || profile.system_prompt_file !== undefined)
         systemPrompt = settings.system_prompt_file
           ? readFileSync(settings.system_prompt_file, "utf8")
           : "";
-        settings.inherit_context = input.inheritContext ?? settings.inherit_context ?? false;
-      }
-      if (!settings?.provider || !settings.model)
+      settings.inherit_context = input.inheritContext ?? settings.inherit_context ?? false;
+      if (input.inheritContext ?? profile.inherit_context)
+        inheritedContext = this.context.snapshot || "";
+      if (!settings.provider || !settings.model)
         throw new Error("Agent needs a provider and model (explicitly or inherited from parent)");
     }
     const spec: TaskSpec = {

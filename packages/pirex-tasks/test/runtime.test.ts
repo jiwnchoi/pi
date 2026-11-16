@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Store } from "../lib/store.ts";
 import { defaultConfig, loadConfig } from "../lib/config.ts";
 import { Runtime, readBounded, sanitize } from "../lib/runtime.ts";
-import type { Config, TaskSpec } from "../lib/types.ts";
+import type { AgentSettings, Config, TaskInput, TaskSpec } from "../lib/types.ts";
 import { parseSpec } from "../lib/validation.ts";
 const roots: string[] = [];
 const stores: Store[] = [];
@@ -175,6 +175,185 @@ describe("runtime admission and bounded output", () => {
     expect(settings.agent?.model).toBe("test");
     expect(settings.agent?.thinking).toBe("high");
     expect(settings.context).toBe("");
+  });
+  for (const resume of [false, true]) {
+    describe(resume ? "resumed agent settings" : "new agent settings", () => {
+      const cases: {
+        name: string;
+        profile?: AgentSettings;
+        input?: Partial<TaskInput>;
+        expected: AgentSettings;
+      }[] = [
+        {
+          name: "inherits the current parent",
+          expected: { provider: "current", model: "current-model", thinking: "max" },
+        },
+        {
+          name: "honors explicit overrides",
+          input: { provider: "explicit", model: "explicit-model", thinking: "off" },
+          expected: { provider: "explicit", model: "explicit-model", thinking: "off" },
+        },
+        {
+          name: "honors profile overrides",
+          profile: { provider: "profile", model: "profile-model", thinking: "low" },
+          expected: { provider: "profile", model: "profile-model", thinking: "low" },
+        },
+        {
+          name: "keeps unspecified profile fields current",
+          profile: { thinking: "medium" },
+          expected: { provider: "current", model: "current-model", thinking: "medium" },
+        },
+        {
+          name: "prefers explicit fields over profile fields",
+          profile: { provider: "profile", model: "profile-model", thinking: "low" },
+          input: { model: "explicit-model", thinking: "xhigh" },
+          expected: { provider: "profile", model: "explicit-model", thinking: "xhigh" },
+        },
+        {
+          name: "keeps a bare model override on the current provider",
+          input: { model: "other-model" },
+          expected: { provider: "current", model: "other-model", thinking: "max" },
+        },
+        {
+          name: "uses an explicit provider without inventing a model",
+          input: { provider: "other" },
+          expected: { provider: "other", model: "current-model", thinking: "max" },
+        },
+      ];
+      it.each(cases)("$name", ({ profile, input, expected }) => {
+        const rt = makeRuntime();
+        const request = { name: "Agent", prompt: "test", explicitRequest: true };
+        const original = resume ? rt.submit("agent", request) : undefined;
+        if (original) rt.store.finish(original.runId, "succeeded", 0);
+        rt.context = {
+          ...rt.context,
+          provider: "current",
+          model: "current-model",
+          thinking: "max",
+        };
+        if (profile) rt.config.agents.profiles = { selected: profile };
+        const task = rt.submit("agent", {
+          ...request,
+          resume: original?.taskId,
+          profile: profile ? "selected" : undefined,
+          ...input,
+        });
+        expect(parseSpec(rt.store.task(rt.owner, task.taskId)).agent).toMatchObject(expected);
+        if (original) {
+          expect(task.taskId).toBe(original.taskId);
+          expect(task.runId).not.toBe(original.runId);
+          expect(
+            parseSpec(rt.store.required("SELECT * FROM runs WHERE id=?", original.runId)).agent,
+          ).toMatchObject({ provider: "test", model: "test", thinking: "high" });
+        }
+      });
+    });
+  }
+  it("preserves resumed session state but not old profile model defaults", () => {
+    const rt = makeRuntime();
+    const promptPath = join(rt.store.root, "prompt.md");
+    writeFileSync(promptPath, "Saved system prompt");
+    rt.context.snapshot = "Saved parent reference";
+    rt.config.agents.profiles = {
+      original: {
+        provider: "profile",
+        model: "profile-model",
+        thinking: "low",
+        tools: ["read"],
+        system_prompt_file: promptPath,
+        inherit_context: true,
+      },
+    };
+    const first = rt.submit("agent", {
+      name: "Agent",
+      prompt: "first",
+      explicitRequest: true,
+      profile: "original",
+    });
+    const session = rt.store.required<{ path: string }>(
+      "SELECT path FROM agent_sessions WHERE task_id=?",
+      first.taskId,
+    );
+    writeFileSync(session.path, "Saved conversation and tool context");
+    rt.store.finish(first.runId, "succeeded", 0);
+    rmSync(promptPath);
+    rt.context = {
+      ...rt.context,
+      provider: "current",
+      model: "current-model",
+      thinking: "max",
+      snapshot: "Not requested",
+    };
+    const next = rt.submit("agent", {
+      name: "Again",
+      prompt: "next",
+      explicitRequest: true,
+      resume: first.taskId,
+    });
+    expect(parseSpec(rt.store.task(rt.owner, next.taskId))).toMatchObject({
+      resumeRunId: first.runId,
+      cwd: rt.store.root,
+      systemPrompt: "Saved system prompt",
+      context: "Saved parent reference",
+      agent: {
+        provider: "current",
+        model: "current-model",
+        thinking: "max",
+        tools: ["read"],
+        inherit_context: true,
+      },
+    });
+    expect(
+      rt.store.required("SELECT path FROM agent_sessions WHERE task_id=?", first.taskId),
+    ).toEqual(session);
+    expect(readBounded(session.path).text).toBe("Saved conversation and tool context");
+  });
+  it("applies new profiles, tools and reference settings on resume", () => {
+    const rt = makeRuntime();
+    const first = rt.submit("agent", { name: "Agent", prompt: "first", explicitRequest: true });
+    rt.store.finish(first.runId, "succeeded", 0);
+    const promptPath = join(rt.store.root, "prompt.md");
+    writeFileSync(promptPath, "New profile prompt");
+    rt.config.agents.profiles = {
+      next: { system_prompt_file: promptPath, tools: ["read"], inherit_context: true },
+    };
+    rt.context.snapshot = "Current reference";
+    expect(() =>
+      rt.submit("agent", {
+        name: "Again",
+        prompt: "next",
+        explicitRequest: true,
+        resume: first.taskId,
+        profile: "missing",
+      }),
+    ).toThrow("Unknown user-defined");
+    const next = rt.submit("agent", {
+      name: "Again",
+      prompt: "next",
+      explicitRequest: true,
+      resume: first.taskId,
+      profile: "next",
+      tools: ["read", "grep"],
+    });
+    expect(parseSpec(rt.store.task(rt.owner, next.taskId))).toMatchObject({
+      systemPrompt: "New profile prompt",
+      context: "Current reference",
+      agent: { tools: ["read", "grep"] },
+    });
+  });
+  it("does not fall back to stale provider/model settings on resume", () => {
+    const rt = makeRuntime();
+    const first = rt.submit("agent", { name: "Agent", prompt: "test", explicitRequest: true });
+    rt.store.finish(first.runId, "succeeded", 0);
+    rt.context.provider = undefined;
+    expect(() =>
+      rt.submit("agent", {
+        name: "Again",
+        prompt: "test",
+        explicitRequest: true,
+        resume: first.taskId,
+      }),
+    ).toThrow("provider and model");
   });
   it("admits explicitly requested agents in child sessions and refuses execution outside Rex", () => {
     const rt = makeRuntime();

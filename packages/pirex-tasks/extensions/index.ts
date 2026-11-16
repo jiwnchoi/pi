@@ -115,7 +115,7 @@ export default function pirexTasks(pi: ExtensionAPI): void {
       cwd: ctx.cwd,
       provider: ctx.model?.provider,
       model: ctx.model?.id,
-      thinking: pi.getThinkingLevel(),
+      thinking: ctx.thinkingLevel ?? pi.getThinkingLevel(),
     };
     return runtime;
   };
@@ -373,6 +373,7 @@ export default function pirexTasks(pi: ExtensionAPI): void {
     ctx: ExtensionToolContext,
   ): Record<string, unknown> => {
     const rt = requireRuntime(ctx);
+    rt.context.snapshot = undefined;
     if (
       kind === "agent" &&
       (params.inheritContext ||
@@ -407,9 +408,23 @@ export default function pirexTasks(pi: ExtensionAPI): void {
       }),
       profile: Type.Optional(Type.String()),
       resume: Type.Optional(Type.String()),
-      provider: Type.Optional(Type.String()),
-      model: Type.Optional(Type.String()),
-      thinking: Type.Optional(Type.String()),
+      provider: Type.Optional(
+        Type.String({
+          description: "Provider ID; defaults to the selected profile, then current parent.",
+        }),
+      ),
+      model: Type.Optional(
+        Type.String({
+          description:
+            "Exact model ID within provider; defaults to the selected profile, then current parent, including on resume.",
+        }),
+      ),
+      thinking: Type.Optional(
+        Type.String({
+          description:
+            "Thinking level; defaults to the selected profile, then current parent, including on resume. Pi clamps unsupported levels.",
+        }),
+      ),
       tools: Type.Optional(Type.Array(Type.String())),
       inheritContext: Type.Optional(Type.Boolean()),
     }),
