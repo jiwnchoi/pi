@@ -97,6 +97,7 @@ export interface TaskRecord extends Omit<RunRecord, "id" | "task_id"> {
   name: string;
   kind: TaskKind;
   current_run: string;
+  state_changed?: number;
   run_id: string;
 }
 export interface TaskReceipt {

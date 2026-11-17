@@ -58,6 +58,33 @@ describe("SQLite task registry", () => {
     expect(reopened.task("a", task.id).id).toBe(task.id);
     reopened.close();
   });
+  it("reads state-change times from the current run without counting unrelated activity", () => {
+    const store = makeStore();
+    const task = store.submit("a", "shell", "Test", spec(store.root), "s");
+    store.exec("UPDATE events SET created=10 WHERE run_id=?", task.run_id);
+    expect(store.task("a", task.id).state_changed).toBe(10);
+    for (const [index, state] of [
+      "starting",
+      "running",
+      "stop_requested",
+      "unknown",
+      "failed",
+      "succeeded",
+    ].entries()) {
+      store.exec("UPDATE runs SET state=?,heartbeat=99999 WHERE id=?", state, task.run_id);
+      const type = state === "unknown" ? "launch_uncertain" : state;
+      store.event(task.run_id, type);
+      store.exec(
+        "UPDATE events SET created=? WHERE run_id=? AND type=?",
+        20 + index,
+        task.run_id,
+        type,
+      );
+      store.event(task.run_id, "steer_requested");
+      expect(store.task("a", task.id).state_changed).toBe(20 + index);
+      expect(store.list("a")[0].state_changed).toBe(20 + index);
+    }
+  });
   it("clears only terminal tasks from the list without deleting durable records", () => {
     const store = makeStore(),
       a = store.submit("a", "shell", "Done", spec(store.root), "s"),

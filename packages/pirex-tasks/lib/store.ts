@@ -14,6 +14,9 @@ interface Database {
   prepare(sql: string): Statement;
   close(): void;
 }
+const stateChanged = `COALESCE((SELECT MAX(e.created) FROM events e
+  WHERE e.run_id=r.id AND e.type=CASE r.state WHEN 'unknown' THEN 'launch_uncertain' ELSE r.state END),
+  r.ended,r.started,r.created) state_changed`;
 const bunModule = "bun:sqlite";
 const SQLite: new (path: string) => Database = process.versions.bun
   ? ((await import(bunModule)) as { Database: new (path: string) => Database }).Database
@@ -43,6 +46,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS events(
         id INTEGER PRIMARY KEY, run_id TEXT NOT NULL REFERENCES runs(id), type TEXT NOT NULL,
         data TEXT NOT NULL, created INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS events_run_type_created ON events(run_id,type,created);
       CREATE TABLE IF NOT EXISTS notification_outbox(
         id TEXT PRIMARY KEY, run_id TEXT UNIQUE NOT NULL REFERENCES runs(id), owner TEXT NOT NULL,
         delivered INTEGER, lease_until INTEGER, lease_token TEXT);
@@ -179,7 +183,7 @@ export class Store {
   task(owner: string, id: string): TaskRecord {
     const row = this.get<TaskRecord>(
       `SELECT t.*,r.id run_id,r.state,r.spec,r.rex_session,r.rex_block,r.started,r.ended,
-      r.heartbeat,r.exit_code,r.error,r.result_path,r.log_path,r.parent_run,r.rex_source
+      r.heartbeat,r.exit_code,r.error,r.result_path,r.log_path,r.parent_run,r.rex_source,${stateChanged}
       FROM tasks t JOIN runs r ON r.id=t.current_run WHERE t.owner=? AND t.id=?`,
       owner,
       id,
@@ -189,7 +193,7 @@ export class Store {
   }
   list(owner: string): TaskRecord[] {
     return this.all<TaskRecord>(
-      `SELECT t.*,r.id run_id,r.state,r.spec,r.rex_block,r.rex_session,r.started,r.ended,r.exit_code,r.error,r.log_path,r.result_path,r.heartbeat,r.parent_run,r.rex_source
+      `SELECT t.*,r.id run_id,r.state,r.spec,r.rex_block,r.rex_session,r.started,r.ended,r.exit_code,r.error,r.log_path,r.result_path,r.heartbeat,r.parent_run,r.rex_source,${stateChanged}
       FROM tasks t JOIN runs r ON r.id=t.current_run WHERE t.owner=? AND t.hidden=0 ORDER BY t.created DESC LIMIT 100`,
       owner,
     );

@@ -3,7 +3,7 @@ import type {
   ExtensionContext,
   ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent";
-import { Text, MouseRegion } from "@earendil-works/pi-tui";
+import { Text, MouseRegion, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { taskRow, type TaskRowState } from "./tool-row.ts";
 import {
   coloredDock,
@@ -564,8 +564,8 @@ export default function pirexTasks(pi: ExtensionAPI): void {
     }
     const id = await ctx.ui.custom<string | undefined>(
       (tui, theme, _keybindings, done) => {
-        const height = Math.max(5, Math.floor(tui.terminal.rows * 0.7));
-        let picker = taskPicker(rows, theme, done, Math.max(1, height - 3), onAction);
+        const height = Math.max(7, Math.floor(tui.terminal.rows * 0.7));
+        let picker = taskPicker(rows, theme, done, height - 4, onAction);
         function onAction(action: "kill" | "clear", taskId: string): void {
           try {
             if (action === "kill") {
@@ -581,22 +581,13 @@ export default function pirexTasks(pi: ExtensionAPI): void {
           } catch (error) {
             report(error);
           }
-          picker = taskPicker(
-            rt.store.list(rt.owner),
-            theme,
-            done,
-            Math.max(1, height - 3),
-            onAction,
-          );
+          picker = taskPicker(rt.store.list(rt.owner), theme, done, height - 4, onAction);
           tui.requestRender();
         }
         return {
-          render: (width: number) => {
-            const lines = picker.render(width);
-            const footer = lines.pop() || "";
-            return [...lines, ...Array(Math.max(0, height - lines.length - 1)).fill(""), footer];
-          },
+          render: (width: number) => picker.render(width),
           invalidate: () => picker.invalidate(),
+          handleMouse: (event: TuiMouseEvent) => picker.handleMouse(event),
           handleInput(data: string) {
             picker.handleInput(data);
             tui.requestRender();

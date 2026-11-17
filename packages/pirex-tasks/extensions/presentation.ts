@@ -1,5 +1,15 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { Container, SelectList, Text, truncateToWidth, matchesKey } from "@earendil-works/pi-tui";
+import {
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
+  wrapTextWithAnsi,
+  Container,
+  SelectList,
+  Text,
+  truncateToWidth,
+  visibleWidth,
+  matchesKey,
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { sanitize } from "../lib/runtime.ts";
@@ -142,14 +152,26 @@ export function taskPicker(
   action: (type: "kill" | "clear", id: string) => void = () => {},
 ): Container & { handleInput(data: string): void } {
   const box = new Container();
-  box.addChild(new Text(theme.fg("accent", `Tasks · ${rows.length}`), 1, 0));
+  const groups = ["running", "queued", "failed", "done"] as const;
+  const groupFor = (state: TaskState): (typeof groups)[number] => {
+    if (["starting", "running", "stop_requested"].includes(state)) return "running";
+    if (state === "queued") return "queued";
+    if (["failed", "timed_out", "unknown"].includes(state)) return "failed";
+    return "done";
+  };
+  const changedAt = (row: TaskRecord) =>
+    row.state_changed ?? row.ended ?? row.started ?? row.created;
+  const sorted = groups.flatMap((group) =>
+    rows
+      .filter((row) => groupFor(row.state) === group)
+      .sort((left, right) => changedAt(right) - changedAt(left)),
+  );
   const list = new SelectList(
-    rows.map((row) => ({
+    sorted.map((row) => ({
       value: row.id,
       label: oneLine(row.name),
-      description: stateLabel(row.state),
     })),
-    visibleRows,
+    Math.max(1, sorted.length),
     {
       selectedPrefix: (text) => theme.fg("accent", text),
       selectedText: (text) => theme.fg("accent", text),
@@ -160,12 +182,99 @@ export function taskPicker(
   );
   list.onSelect = (item) => done(item.value);
   list.onCancel = () => done(undefined);
-  box.addChild(list);
-  box.addChild(
-    new Text(theme.fg("dim", "↑↓ select · Enter open · k kill · c clear · Esc close"), 1, 0),
-  );
+  let hitRows: (string | undefined)[] = [];
+  let pressedId: string | undefined;
   return Object.assign(box, {
+    render(width: number): string[] {
+      const innerWidth = Math.max(0, width - 2);
+      const border = (text: string) => theme.fg("border", text);
+      const frame = (text: string) => {
+        const content = truncateToWidth(text, innerWidth, "");
+        return truncateToWidth(
+          border("│") +
+            content +
+            " ".repeat(Math.max(0, innerWidth - visibleWidth(content))) +
+            border("│"),
+          width,
+          "",
+        );
+      };
+      const divider = (group: string) => {
+        const label = `─ ${group} `;
+        return theme.fg(
+          stateColor(group),
+          label + "─".repeat(Math.max(0, innerWidth - label.length)),
+        );
+      };
+      const selectedId = list.getSelectedItem()?.value;
+      const entries: { text: string; group: string; id?: string }[] = [];
+      sorted.forEach((row, index) => {
+        const group = groupFor(row.state);
+        if (index === 0 || group !== groupFor(sorted[index - 1].state))
+          entries.push({ text: divider(group), group });
+        const lines = wrapTextWithAnsi(oneLine(row.name), Math.max(1, innerWidth - 2));
+        lines.forEach((line, lineIndex) => {
+          const text = `${row.id === selectedId && lineIndex === 0 ? "→ " : "  "}${line}`;
+          entries.push({
+            text: row.id === selectedId ? theme.fg("accent", text) : text,
+            group,
+            id: row.id,
+          });
+        });
+      });
+      const limit = Math.max(3, visibleRows);
+      const scrolling = entries.length > limit;
+      const capacity = scrolling ? limit - 1 : limit;
+      const selectedIndex = entries.findIndex((entry) => entry.id === selectedId);
+      const start = Math.max(
+        0,
+        Math.min(selectedIndex - Math.floor((capacity - 1) / 2), entries.length - capacity),
+      );
+      const window = entries.slice(start, start + capacity);
+      if (window[0]?.id) {
+        window.unshift({ text: divider(window[0].group), group: window[0].group });
+        window.pop();
+      }
+      hitRows = window.map((entry) => entry.id);
+      const body = window.map((entry) => entry.text);
+      if (!sorted.length) body.push(theme.fg("dim", "  No tasks"));
+      if (scrolling)
+        body.push(
+          theme.fg(
+            "dim",
+            `  (${sorted.findIndex((row) => row.id === selectedId) + 1}/${sorted.length})`,
+          ),
+        );
+      body.push(...Array<string>(Math.max(0, limit - body.length)).fill(""));
+      return [
+        truncateToWidth(border("╭" + "─".repeat(innerWidth) + "╮"), width, ""),
+        frame(theme.fg("accent", ` Tasks · ${rows.length}`)),
+        ...body.map(frame),
+        frame(theme.fg("dim", " ↑↓ select · Click/Enter open · k kill · c clear · Esc close")),
+        truncateToWidth(border("╰" + "─".repeat(innerWidth) + "╯"), width, ""),
+      ];
+    },
+    handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+      if (event.type === "wheel") {
+        pressedId = undefined;
+        return list.handleMouse(event);
+      }
+      if (event.button !== "left" || (event.type !== "press" && event.type !== "click"))
+        return undefined;
+      if (event.x <= 0 || event.x >= event.width - 1) return undefined;
+      const id = hitRows[event.y - 2];
+      if (event.type === "press") {
+        pressedId = id;
+        return id ? { handled: true, focus: true, render: false } : undefined;
+      }
+      const target = pressedId ?? id;
+      pressedId = undefined;
+      if (!target) return undefined;
+      done(target);
+      return { handled: true };
+    },
     handleInput(data: string) {
+      pressedId = undefined;
       const selected = list.getSelectedItem();
       if (selected && (matchesKey(data, "k") || matchesKey(data, "c"))) {
         action(matchesKey(data, "k") ? "kill" : "clear", selected.value);
