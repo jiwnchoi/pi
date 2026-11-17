@@ -5,7 +5,6 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Text, MouseRegion, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { taskRow, type TaskRowState } from "./tool-row.ts";
-import { showTaskLog } from "./log-view.ts";
 import {
   coloredDock,
   resultSummary,
@@ -124,16 +123,6 @@ export default function pirexTasks(pi: ExtensionAPI): void {
   const open = async (ctx: ExtensionContext, id: string): Promise<void> => {
     const rt = requireRuntime(ctx);
     const row = rt.store.task(rt.owner, id);
-    const session =
-      row.kind === "agent"
-        ? rt.store.get<{ path: string }>("SELECT path FROM agent_sessions WHERE task_id=?", row.id)
-        : undefined;
-    if (terminal.has(row.state) && (!session || !existsSync(session.path))) {
-      if (ctx.mode !== "tui")
-        throw new Error("Use task_logs or task_result outside interactive Pi");
-      void showTaskLog(ctx, row).catch(report);
-      return;
-    }
     await openPopup(row, rt.config.popup.bounds, rt.store, rt.context.anchor);
   };
   const draw = (ctx: ExtensionContext, rt: Runtime): void => {
@@ -509,7 +498,7 @@ export default function pirexTasks(pi: ExtensionAPI): void {
   );
   register(
     "task_open",
-    "Open a live task terminal, show completed logs without a PTY, or reopen a completed Pi session; returns immediately.",
+    "Open a Rex popup for a live task, completed logs, or a saved Pi session; allocates a PTY only while open and returns immediately.",
     idSchema,
     async (p, ctx) => {
       await open(ctx, p.taskId);

@@ -123,9 +123,9 @@ describe("completed task PTY release", () => {
     expect(store.all("SELECT * FROM runs WHERE rex_source IS NOT NULL")).toHaveLength(0);
     expect(closed()).toEqual([]);
   });
-  it("opens only active tasks as viewers, completed agents as saved sessions, and never shells again", () => {
+  it("opens completed logs in a disposable pager and agents in saved sessions, never rerunning shells", () => {
     const row = task();
-    expect(() => popupCommand(row, store.root)).toThrow("without a terminal");
+    expect(popupCommand(row, store.root)[1]).toMatch(/logs\.ts$/);
     expect(popupCommand({ ...row, kind: "agent" }, store.root)[1]).toMatch(/resume\.ts$/);
     expect(popupCommand({ ...row, state: "running" }, store.root)[1]).toMatch(/attach\.ts$/);
   });
@@ -167,8 +167,11 @@ describe("completed task PTY release", () => {
     expect(closed()).toEqual([]);
     expect(rpc).toHaveBeenCalledWith("session.detach_block", { block_id: "legacy" });
   });
-  it("closes a completed inspection when hidden instead of touching its old source", async () => {
+  it("closes completed inspections even for legacy task specs when hidden", async () => {
     const row = task();
+    const spec = parseSpec(row);
+    delete spec.executionMode;
+    row.spec = stringifyJson(spec);
     row.rex_inspection = "inspection";
     rpc.mockImplementation(() => ({ blocks: [{ block_id: "inspection" }] }));
     await hidePopup(row);

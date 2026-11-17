@@ -10,6 +10,7 @@ import { join } from "node:path";
 import pirexTasks from "../extensions/index.ts";
 import { Runtime } from "../lib/runtime.ts";
 import { parseSpec } from "../lib/validation.ts";
+import * as rex from "../lib/rex.ts";
 
 let cleanup: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -115,21 +116,20 @@ it("refreshes model, provider and thinking from every invoking tool context, inc
     thinking: "max",
   });
   rt.store.finish(workflow.details.runId, "succeeded", 0);
-  const custom = vi.fn(() => new Promise(() => {}));
-  const interactive = {
-    ...ctx,
-    mode: "tui",
-    ui: { ...ctx.ui, custom },
-  } as unknown as ExtensionToolContext;
+  const openPopup = vi.spyOn(rex, "openPopup").mockResolvedValue();
   const open = registerTool.mock.calls.find(([tool]) => tool.name === "task_open")![0];
   const opened = await open.execute(
     "open",
     { taskId: workflow.details.taskId },
     undefined,
     undefined,
-    interactive,
+    ctx,
   );
   expect(opened.details.state).toBe("opened");
-  expect(custom).toHaveBeenCalledOnce();
-  expect(rt.store.task(rt.owner, workflow.details.taskId).rex_block).toBeNull();
+  expect(openPopup).toHaveBeenCalledOnce();
+  expect(openPopup.mock.calls[0][0]).toMatchObject({
+    run_id: workflow.details.runId,
+    state: "succeeded",
+    kind: "code",
+  });
 });

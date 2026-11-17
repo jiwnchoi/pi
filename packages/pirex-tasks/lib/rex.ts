@@ -8,13 +8,12 @@ import { parseSpec, decodeJson, stringifyJson } from "./validation.ts";
 const exec = promisify(execFile);
 const attachPath = fileURLToPath(new URL("../runner/attach.ts", import.meta.url));
 const resumePath = fileURLToPath(new URL("../runner/resume.ts", import.meta.url));
+const logsPath = fileURLToPath(new URL("../runner/logs.ts", import.meta.url));
 export function popupCommand(row: TaskRecord, root: string): string[] {
-  if (terminal.has(row.state) && row.kind !== "agent")
-    throw new Error("Completed task output is shown in Pi without a terminal");
   const spec = parseSpec(row);
   return [
     spec.config.execution.node,
-    terminal.has(row.state) ? resumePath : attachPath,
+    terminal.has(row.state) ? (row.kind === "agent" ? resumePath : logsPath) : attachPath,
     root,
     row.run_id,
   ];
@@ -97,8 +96,6 @@ export async function openPopup(
     if (latest.run_id !== row.run_id) throw new Error("Task has a newer run; reopen it");
     Object.assign(row, latest);
     if (terminal.has(row.state)) {
-      if (row.kind !== "agent")
-        throw new Error("Completed task output is shown in Pi without a terminal");
       const disposing = pending.get(key);
       if (disposing) await disposing;
       await closePopup(row, store, false);
@@ -195,7 +192,9 @@ export async function hidePopup(row: TaskRecord): Promise<void> {
   const spec = parseSpec(row);
   await api(
     row.rex_session,
-    spec.executionMode === "detached" || spec.executionMode === "rex-native"
+    terminal.has(row.state) ||
+      spec.executionMode === "detached" ||
+      spec.executionMode === "rex-native"
       ? "block.close"
       : "session.detach_block",
     { block_id: row.rex_block },

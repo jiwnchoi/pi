@@ -84,6 +84,22 @@ export function readBounded(path: string, maxBytes = 16384, tail = true): Bounde
     path,
   };
 }
+export function savedLog(
+  row: Pick<TaskRecord, "name" | "state" | "result_path" | "log_path"> & { error?: string | null },
+): string {
+  const output = readBounded(row.result_path || row.log_path, 51200);
+  return [
+    sanitize(`${row.state} · ${row.name}`),
+    "Read-only log · arrows / PgUp / PgDn to scroll · q to close",
+    ...(row.error ? [sanitize(row.error)] : []),
+    "",
+    output.text || "(No output)",
+    "",
+    sanitize(
+      `${output.truncated ? "Showing the last 50 KiB. Full output" : "Output"}: ${output.path}`,
+    ),
+  ].join("\n");
+}
 export class Runtime {
   store: Store;
   owner: string;

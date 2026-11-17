@@ -96,12 +96,22 @@ try {
   await gone(running.rex_source, viewer);
   assert.match(rt.result(interactive.taskId).output?.text || "", /ANSWER=hello-from-rex/);
   assert.equal(readFileSync(join(root, "starts.txt"), "utf8"), "start\n");
-  await assert.rejects(
-    openPopup(rt.store.task(rt.owner, interactive.taskId), config.popup.bounds, rt.store),
-    /without a terminal/,
-  );
+  const completedLog = rt.store.task(rt.owner, interactive.taskId);
+  await openPopup(completedLog, config.popup.bounds, rt.store);
+  assert.ok(completedLog.rex_inspection);
+  await screen(completedLog.rex_inspection!, "ANSWER=hello-from-rex");
+  await rt.drain();
+  assert.ok((await blocks()).some((block) => block.block_id === completedLog.rex_inspection));
+  await api(completedLog.rex_session, "block.method", {
+    block_id: completedLog.rex_inspection,
+    method: "write",
+    args: { data: "q" },
+  });
+  await gone(completedLog.rex_inspection);
+  assert.equal(readFileSync(join(root, "starts.txt"), "utf8"), "start\n");
+  assert.equal(rt.result(interactive.taskId).state, "succeeded");
   console.log(
-    "PASS live input, hide/reopen, exactly-once execution and automatic source/viewer PTY release",
+    "PASS live input, completed logs in a new Rex popup, pager exit, exactly-once execution and PTY release",
   );
 
   const failed = rt.submit("shell", { name: "Nonzero smoke", command: "exit 7" });
@@ -123,6 +133,27 @@ try {
   assert.equal((await wait(code.taskId)).state, "succeeded");
   assert.match(rt.result(code.taskId).output?.text || "", /child-output/);
   console.log("PASS nonzero exit, timeout, stop, workflow and child results");
+
+  const agentRuntime = rt.config.agent_runtime;
+  rt.config.agent_runtime = {
+    executable: "/usr/bin/false",
+    bootstrap_shell: "/bin/sh",
+    bootstrap_args: ["-c"],
+  };
+  const noSession = rt.submit("agent", {
+    name: "Agent startup failure",
+    explicitRequest: true,
+    prompt: "fixture only",
+  });
+  rt.config.agent_runtime = agentRuntime;
+  assert.equal((await wait(noSession.taskId)).state, "failed");
+  const noSessionLog = rt.store.task(rt.owner, noSession.taskId);
+  await openPopup(noSessionLog, config.popup.bounds, rt.store);
+  await screen(noSessionLog.rex_inspection!, "Agent exited before completion");
+  await hidePopup(noSessionLog);
+  await gone(noSessionLog.rex_inspection);
+  assert.equal(rt.result(noSession.taskId).state, "failed");
+  console.log("PASS agents without saved sessions fall back to a disposable Rex log popup");
 
   const agent = rt.submit("agent", {
     name: "Agent fixture",
