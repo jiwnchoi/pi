@@ -114,7 +114,6 @@ export class Runtime {
       throw new Error("timeoutSeconds must be positive");
     let cwd = validateCwd(input.cwd, this.context.cwd || process.cwd());
     let runConfig = this.config;
-    let inheritedContext = this.context.snapshot || "";
     if (!statSync(cwd).isDirectory()) throw new Error(`Not a directory: ${cwd}`);
     let settings: AgentSettings | undefined;
     let systemPrompt: string | undefined;
@@ -135,7 +134,6 @@ export class Runtime {
         systemPrompt = oldSpec.systemPrompt;
         cwd = oldSpec.cwd;
         runConfig = oldSpec.config;
-        inheritedContext = oldSpec.context;
       }
       const profile = input.profile ? this.config.agents.profiles?.[input.profile] : {};
       if (!profile) throw new Error(`Unknown user-defined agent profile: ${input.profile}`);
@@ -151,9 +149,7 @@ export class Runtime {
         systemPrompt = settings.system_prompt_file
           ? readFileSync(settings.system_prompt_file, "utf8")
           : "";
-      settings.inherit_context = input.inheritContext ?? settings.inherit_context ?? false;
-      if (input.inheritContext ?? profile.inherit_context)
-        inheritedContext = this.context.snapshot || "";
+      settings.inherit_context = input.inheritContext ?? profile.inherit_context ?? false;
       if (!settings.provider || !settings.model)
         throw new Error("Agent needs a provider and model (explicitly or inherited from parent)");
     }
@@ -178,7 +174,7 @@ export class Runtime {
       },
       agent: settings,
       systemPrompt,
-      context: settings?.inherit_context ? inheritedContext : "",
+      context: settings?.inherit_context ? this.context.snapshot || "" : "",
       launchContext: { ...this.context, snapshot: undefined },
     };
     const row = this.store.submit(this.owner, kind, input.name, spec, this.context.session, resume);

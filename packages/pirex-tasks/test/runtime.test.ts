@@ -6,7 +6,7 @@ import { Store } from "../lib/store.ts";
 import { defaultConfig, loadConfig } from "../lib/config.ts";
 import { Runtime, readBounded, sanitize } from "../lib/runtime.ts";
 import type { AgentSettings, Config, TaskInput, TaskSpec } from "../lib/types.ts";
-import { parseSpec } from "../lib/validation.ts";
+import { parseSpec, stringifyJson } from "../lib/validation.ts";
 const roots: string[] = [];
 const stores: Store[] = [];
 const runtimes: Runtime[] = [];
@@ -249,7 +249,7 @@ describe("runtime admission and bounded output", () => {
       });
     });
   }
-  it("preserves resumed session state but not old profile model defaults", () => {
+  it("preserves resumed session state but not old profile model defaults or parent references", () => {
     const rt = makeRuntime();
     const promptPath = join(rt.store.root, "prompt.md");
     writeFileSync(promptPath, "Saved system prompt");
@@ -275,6 +275,7 @@ describe("runtime admission and bounded output", () => {
       first.taskId,
     );
     writeFileSync(session.path, "Saved conversation and tool context");
+    expect(parseSpec(rt.store.task(rt.owner, first.taskId)).context).toBe("Saved parent reference");
     rt.store.finish(first.runId, "succeeded", 0);
     rmSync(promptPath);
     rt.context = {
@@ -294,13 +295,13 @@ describe("runtime admission and bounded output", () => {
       resumeRunId: first.runId,
       cwd: rt.store.root,
       systemPrompt: "Saved system prompt",
-      context: "Saved parent reference",
+      context: "",
       agent: {
         provider: "current",
         model: "current-model",
         thinking: "max",
         tools: ["read"],
-        inherit_context: true,
+        inherit_context: false,
       },
     });
     expect(
@@ -340,6 +341,37 @@ describe("runtime admission and bounded output", () => {
       context: "Current reference",
       agent: { tools: ["read", "grep"] },
     });
+  });
+  it.each([false, true])("defaults parent inheritance to false with legacy resume=%s", (resume) => {
+    const rt = makeRuntime();
+    rt.context.snapshot = "Private parent conversation";
+    const request = { name: "Agent", prompt: "Self-contained task", explicitRequest: true };
+    const first = resume ? rt.submit("agent", { ...request, inheritContext: true }) : undefined;
+    if (first) {
+      rt.store.finish(first.runId, "succeeded", 0);
+      rt.context.snapshot = "Updated private parent conversation";
+    }
+    const task = rt.submit("agent", { ...request, resume: first?.taskId });
+    const settings = parseSpec(rt.store.task(rt.owner, task.taskId));
+    expect(settings.agent?.inherit_context).toBe(false);
+    expect(settings.context).toBe("");
+    expect(stringifyJson(settings)).not.toContain("Private parent conversation");
+    expect(settings.launchContext.snapshot).toBeUndefined();
+  });
+  it("lets explicit false override a profile enabling parent inheritance", () => {
+    const rt = makeRuntime();
+    rt.context.snapshot = "Private parent conversation";
+    rt.config.agents.profiles = { selected: { inherit_context: true } };
+    const task = rt.submit("agent", {
+      name: "Agent",
+      prompt: "Self-contained task",
+      explicitRequest: true,
+      profile: "selected",
+      inheritContext: false,
+    });
+    const settings = parseSpec(rt.store.task(rt.owner, task.taskId));
+    expect(settings.agent?.inherit_context).toBe(false);
+    expect(settings.context).toBe("");
   });
   it("does not fall back to stale provider/model settings on resume", () => {
     const rt = makeRuntime();

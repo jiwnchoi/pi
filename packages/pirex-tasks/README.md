@@ -152,14 +152,18 @@ extension does not change model metadata or user defaults.
 
 The child's own saved session is used for resume, preserving conversation and
 other session state. Its working directory, runtime configuration snapshot, tool
-allowlist, saved system prompt and parent reference snapshot are retained unless
-applicable settings are explicitly replaced. A newly selected profile overrides
-saved tools/system-prompt/reference options; explicit `tools` and `inheritContext`
-override the profile. An explicitly enabled `inheritContext` (directly or through
-a selected profile) captures a fresh bounded parent reference; otherwise resume
-keeps the saved reference, or omits it when explicitly disabled. A new run records
-each attempt; old results are not overwritten. `inheritContext` is opt-in for new
-runs. This is not an exact fork of the parent's full session.
+allowlist and saved system prompt are retained unless applicable settings are
+explicitly replaced. A newly selected profile overrides saved tools/system-prompt
+options; explicit `tools` and `inheritContext` override the profile.
+`inheritContext` defaults to `false` for both new and resumed runs: saved parent
+references and previous inheritance settings are not reused. Explicitly enabling
+it (directly or through a selected profile) captures a fresh bounded parent
+reference. Explicit `false` also prevents capture when a profile enables it.
+Delegating agents should pass `inheritContext: false` and a self-contained task
+prompt, not the parent conversation. The child's own existing conversation is
+preserved on resume; disabling inheritance does not erase earlier messages.
+A new run records each attempt; old results are not overwritten. This is not an
+exact fork of the parent's full session.
 
 The terminal contains the **actual native Pi TUI running in a real PTY**. Input and terminal resize go directly to Pi. The internal extension reports lifecycle and steering acknowledgements through private files/SQLite. The child's configured extensions, MCP servers, skills and prompt templates load normally. Its delegated turn reports completion once; subsequent user-entered turns stay in the same saved Pi session without overwriting the original task result. The `agents.allow_nested` setting is retained for configuration compatibility and is not enforced. Tool allowlists are capability conveniences, not OS sandboxes.
 

@@ -46,7 +46,7 @@ it("refreshes model, provider and thinking from every invoking tool context, inc
     sessionManager: {
       getSessionId: () => "owner",
       getEntries: () => [],
-      buildContextEntries: () => [],
+      buildContextEntries: vi.fn(() => []),
     },
     ui: { notify: vi.fn() },
   } as unknown as ExtensionToolContext;
@@ -62,6 +62,7 @@ it("refreshes model, provider and thinking from every invoking tool context, inc
   };
   await handler("session_start")({}, ctx);
   const agent = registerTool.mock.calls.find(([tool]) => tool.name === "task_agent")![0];
+  expect(agent.parameters.properties.inheritContext.default).toBe(false);
   const request = { name: "Agent", prompt: "test", explicitRequest: true };
   const first = await agent.execute("call", request, undefined, undefined, ctx);
   const rt = submit.mock.instances[0];
@@ -90,6 +91,16 @@ it("refreshes model, provider and thinking from every invoking tool context, inc
     model: "current-model",
     thinking: "max",
   });
+  rt.config.agents.profiles = { selected: { inherit_context: true } };
+  const isolated = await agent.execute(
+    "isolated",
+    { ...request, profile: "selected", inheritContext: false },
+    undefined,
+    undefined,
+    current,
+  );
+  expect(ctx.sessionManager.buildContextEntries).not.toHaveBeenCalled();
+  expect(parseSpec(rt.store.task(rt.owner, isolated.details.taskId)).context).toBe("");
   const code = registerTool.mock.calls.find(([tool]) => tool.name === "task_code")![0];
   const workflow = await code.execute(
     "workflow",
