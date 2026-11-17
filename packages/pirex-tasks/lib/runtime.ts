@@ -87,7 +87,10 @@ export function readBounded(path: string, maxBytes = 16384, tail = true): Bounde
 export function savedLog(
   row: Pick<TaskRecord, "name" | "state" | "result_path" | "log_path"> & { error?: string | null },
 ): string {
-  const output = readBounded(row.result_path || row.log_path, 51200);
+  const paths =
+    row.state === "succeeded" ? [row.result_path, row.log_path] : [row.log_path, row.result_path];
+  let output = readBounded(paths[0] || row.log_path, 51200);
+  if (!output.bytes && paths[1]) output = readBounded(paths[1], 51200);
   return [
     sanitize(`${row.state} · ${row.name}`),
     "Read-only log · arrows / PgUp / PgDn to scroll · q to close",

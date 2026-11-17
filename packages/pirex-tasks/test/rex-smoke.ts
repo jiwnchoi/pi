@@ -114,8 +114,18 @@ try {
     "PASS live input, completed logs in a new Rex popup, pager exit, exactly-once execution and PTY release",
   );
 
-  const failed = rt.submit("shell", { name: "Nonzero smoke", command: "exit 7" });
+  const failed = rt.submit("shell", {
+    name: "Nonzero smoke",
+    command: 'printf "FAILED_SHELL_DIAGNOSTIC\\n"; exit 7',
+  });
   assert.equal((await wait(failed.taskId)).exit_code, 7);
+  const failedShellLog = rt.store.task(rt.owner, failed.taskId);
+  await openPopup(failedShellLog, config.popup.bounds, rt.store);
+  await screen(failedShellLog.rex_inspection!, "FAILED_SHELL_DIAGNOSTIC");
+  await rt.drain();
+  assert.ok((await blocks()).some((block) => block.block_id === failedShellLog.rex_inspection));
+  await hidePopup(failedShellLog);
+  await gone(failedShellLog.rex_inspection);
   const timeout = rt.submit("shell", {
     name: "Timeout smoke",
     command: "sleep 20",
@@ -140,6 +150,53 @@ try {
     bootstrap_shell: "/bin/sh",
     bootstrap_args: ["-c"],
   };
+  const failedWithSession = rt.submit("agent", {
+    name: "Failed agent with saved session",
+    explicitRequest: true,
+    prompt: "fixture only",
+  });
+  rt.store.finish(failedWithSession.runId, "failed", 1, "Fixture bootstrap failed");
+  const failedSessionPath = rt.store.required<{ path: string }>(
+    "SELECT path FROM agent_sessions WHERE task_id=?",
+    failedWithSession.taskId,
+  ).path;
+  writeFileSync(failedSessionPath, "{}\n");
+  writeFileSync(failedWithSession.outputPath, "FAILED_AGENT_DIAGNOSTIC_LOG\n");
+  const failedAgentLog = rt.store.task(rt.owner, failedWithSession.taskId);
+  await openPopup(failedAgentLog, config.popup.bounds, rt.store);
+  await screen(failedAgentLog.rex_inspection!, "FAILED_AGENT_DIAGNOSTIC_LOG");
+  await screen(failedAgentLog.rex_inspection!, "Unable to reopen Pi");
+  await rt.drain();
+  assert.ok((await blocks()).some((block) => block.block_id === failedAgentLog.rex_inspection));
+  await api(failedAgentLog.rex_session, "block.method", {
+    block_id: failedAgentLog.rex_inspection,
+    method: "write",
+    args: { data: "q" },
+  });
+  await gone(failedAgentLog.rex_inspection);
+  console.log("PASS failed Pi resume switches to saved logs in the same popup instead of exiting");
+
+  const brokenRuntime = rt.config.agent_runtime;
+  rt.config.agent_runtime = { ...brokenRuntime, bootstrap_shell: join(root, "missing-bootstrap") };
+  const spawnFailure = rt.submit("agent", {
+    name: "Missing Pi bootstrap",
+    explicitRequest: true,
+    prompt: "fixture only",
+  });
+  rt.config.agent_runtime = brokenRuntime;
+  rt.store.finish(spawnFailure.runId, "failed", 1, "Original failure");
+  const spawnSession = rt.store.required<{ path: string }>(
+    "SELECT path FROM agent_sessions WHERE task_id=?",
+    spawnFailure.taskId,
+  ).path;
+  writeFileSync(spawnSession, "{}\n");
+  const spawnFailureRow = rt.store.task(rt.owner, spawnFailure.taskId);
+  await openPopup(spawnFailureRow, config.popup.bounds, rt.store);
+  await screen(spawnFailureRow.rex_inspection!, "ENOENT");
+  await hidePopup(spawnFailureRow);
+  await gone(spawnFailureRow.rex_inspection);
+  console.log("PASS Pi spawn errors stay visible in the log popup");
+
   const noSession = rt.submit("agent", {
     name: "Agent startup failure",
     explicitRequest: true,
@@ -154,6 +211,26 @@ try {
   await gone(noSessionLog.rex_inspection);
   assert.equal(rt.result(noSession.taskId).state, "failed");
   console.log("PASS agents without saved sessions fall back to a disposable Rex log popup");
+
+  const resumableFailure = rt.submit("agent", {
+    name: "Resumable failed agent",
+    explicitRequest: true,
+    prompt: "must not replay",
+  });
+  rt.store.finish(resumableFailure.runId, "failed", 1, "Original delegated turn failed");
+  const resumableSession = rt.store.required<{ path: string }>(
+    "SELECT path FROM agent_sessions WHERE task_id=?",
+    resumableFailure.taskId,
+  ).path;
+  writeFileSync(resumableSession, "{}\n");
+  const resumableRow = rt.store.task(rt.owner, resumableFailure.taskId);
+  await openPopup(resumableRow, config.popup.bounds, rt.store);
+  await screen(resumableRow.rex_inspection!, "RESUMED_SAVED_PI_SESSION");
+  assert.equal(rt.result(resumableFailure.taskId).state, "failed");
+  assert.equal(readFileSync(resumableSession, "utf8"), "{}\n");
+  await hidePopup(resumableRow);
+  await gone(resumableRow.rex_inspection);
+  console.log("PASS failed agents still reopen saved Pi sessions when resuming is available");
 
   const agent = rt.submit("agent", {
     name: "Agent fixture",

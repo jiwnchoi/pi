@@ -3,10 +3,10 @@ import { writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Store, terminal } from "../lib/store.ts";
-import { savedLog } from "../lib/runtime.ts";
+import { savedLog, sanitize } from "../lib/runtime.ts";
 import type { RunRecord } from "../lib/types.ts";
 
-export async function showLogs(root: string, runId: string): Promise<void> {
+export async function showLogs(root: string, runId: string, notice?: string): Promise<void> {
   const store = new Store(root);
   let path: string;
   try {
@@ -16,7 +16,7 @@ export async function showLogs(root: string, runId: string): Promise<void> {
     );
     if (!terminal.has(row.state)) throw new Error("Only completed tasks have saved log views");
     path = join(dirname(row.log_path), "inspection.txt");
-    writeFileSync(path, savedLog(row), { mode: 0o600 });
+    writeFileSync(path, (notice ? sanitize(notice) + "\n\n" : "") + savedLog(row), { mode: 0o600 });
   } finally {
     store.close();
   }

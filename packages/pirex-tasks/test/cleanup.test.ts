@@ -127,6 +127,8 @@ describe("completed task PTY release", () => {
     const row = task();
     expect(popupCommand(row, store.root)[1]).toMatch(/logs\.ts$/);
     expect(popupCommand({ ...row, kind: "agent" }, store.root)[1]).toMatch(/resume\.ts$/);
+    for (const state of ["failed", "stopped", "timed_out"] as const)
+      expect(popupCommand({ ...row, kind: "agent", state }, store.root)[1]).toMatch(/resume\.ts$/);
     expect(popupCommand({ ...row, state: "running" }, store.root)[1]).toMatch(/attach\.ts$/);
   });
   it("accepts old stored specs without cleanup settings", () => {
