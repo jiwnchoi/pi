@@ -142,7 +142,7 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
   async function connect(): Promise<void> {
     if (disposed) return;
     row = store.required<RunRecord>("SELECT * FROM runs WHERE id=?", run);
-    if (terminal.has(row.state)) {
+    if (terminal.has(row.state) && !row.rex_source) {
       dispose();
       return;
     }
@@ -215,7 +215,6 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
     if (disposed) return;
     disposed = true;
     if (reconnect) clearTimeout(reconnect);
-    clearInterval(completion);
     teardown();
     try {
       if (process.stdin.isTTY) process.stdin.setRawMode(false);
@@ -223,10 +222,6 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
     store.close();
     process.exit(0);
   };
-  const completion = setInterval(() => {
-    row = store.required<RunRecord>("SELECT * FROM runs WHERE id=?", run);
-    if (terminal.has(row.state)) dispose();
-  }, 200);
   process.stdout.on("drain", () => {
     if (!restoring) stream?.resume();
   });

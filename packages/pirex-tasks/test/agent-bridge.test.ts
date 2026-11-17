@@ -60,7 +60,7 @@ function bridge() {
 }
 
 describe("child startup settings", () => {
-  it("reports completion only at final settlement, then exits the delegated Pi", async () => {
+  it("reports final settlement once without shutting down a Pi that may still be visible", async () => {
     const { events, handler, ctx } = bridge();
     await handler("session_start")({}, ctx);
     const message = {
@@ -72,9 +72,10 @@ describe("child startup settings", () => {
     expect(readBounded(events).text).not.toContain('"type":"settled"');
     await handler("agent_settled")({}, ctx);
     expect(readBounded(events).text).toContain("Saved final result");
-    expect(ctx.shutdown).toHaveBeenCalledOnce();
+    expect(ctx.shutdown).not.toHaveBeenCalled();
     await handler("agent_settled")({}, ctx);
-    expect(ctx.shutdown).toHaveBeenCalledOnce();
+    expect(ctx.shutdown).not.toHaveBeenCalled();
+    expect(readBounded(events).text.match(/"type":"settled"/g)).toHaveLength(1);
   });
   it("awaits restored model selection and applies thinking before admitting the delegated prompt", async () => {
     const { runtime, task, events, handler, ctx, setModel, setThinkingLevel, sendUserMessage } =

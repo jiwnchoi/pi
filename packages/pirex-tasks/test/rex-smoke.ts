@@ -93,6 +93,14 @@ try {
     args: { data: "hello-from-rex\n" },
   });
   assert.equal((await wait(interactive.taskId)).state, "succeeded");
+  assert.ok((await blocks()).some((block) => block.block_id === running.rex_source));
+  assert.ok((await blocks()).some((block) => block.block_id === viewer));
+  await rt.drain();
+  const visibleCompleted = rt.store.task(rt.owner, interactive.taskId);
+  await openPopup(visibleCompleted, config.popup.bounds, rt.store);
+  assert.equal(visibleCompleted.rex_block, viewer);
+  assert.equal(visibleCompleted.rex_source, running.rex_source);
+  await hidePopup(visibleCompleted);
   await gone(running.rex_source, viewer);
   assert.match(rt.result(interactive.taskId).output?.text || "", /ANSWER=hello-from-rex/);
   assert.equal(readFileSync(join(root, "starts.txt"), "utf8"), "start\n");
@@ -111,7 +119,7 @@ try {
   assert.equal(readFileSync(join(root, "starts.txt"), "utf8"), "start\n");
   assert.equal(rt.result(interactive.taskId).state, "succeeded");
   console.log(
-    "PASS live input, completed logs in a new Rex popup, pager exit, exactly-once execution and PTY release",
+    "PASS watched completion preserves the same PTYs, closing releases them, reopening shows logs without rerunning",
   );
 
   const failed = rt.submit("shell", {
@@ -246,6 +254,24 @@ try {
     args: { data: "human popup message\n" },
   });
   assert.equal((await wait(agent.taskId)).state, "succeeded");
+  await rt.drain();
+  assert.ok((await blocks()).some((block) => block.block_id === agentRunning.rex_source));
+  assert.ok((await blocks()).some((block) => block.block_id === agentRunning.rex_block));
+  const originalSession = rt.result(agent.taskId).agentSession!;
+  await api(agentRunning.rex_session, "block.method", {
+    block_id: agentRunning.rex_block,
+    method: "write",
+    args: { data: "human followup in original Pi\n" },
+  });
+  for (
+    let attempt = 0;
+    attempt < 40 &&
+    !readFileSync(originalSession, "utf8").includes("human followup in original Pi");
+    attempt++
+  )
+    await delay(100);
+  assert.match(readFileSync(originalSession, "utf8"), /human followup in original Pi/);
+  await hidePopup(rt.store.task(rt.owner, agent.taskId));
   await gone(agentRunning.rex_source, agentRunning.rex_block);
   const result = rt.result(agent.taskId);
   assert.match(result.output?.text || "", /fixture result 한글/);
@@ -307,7 +333,7 @@ try {
   for (const row of rt.store.all("SELECT * FROM runs")) await gone(row.rex_source, row.rex_block);
   assert.ok(existsSync(result.agentSession!));
   console.log(
-    "PASS delegated resume closes inspection first; completed tasks retain no source/viewer PTYs",
+    "PASS delegated resume closes inspection first; closed completed tasks retain no source/viewer PTYs",
   );
 } finally {
   for (const row of rt.store.all("SELECT * FROM runs"))

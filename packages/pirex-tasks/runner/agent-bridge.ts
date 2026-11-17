@@ -96,12 +96,11 @@ export default function agentBridge(pi: ExtensionAPI): void {
         : undefined;
     outcome = { type: "settled", text, error };
   });
-  pi.on("agent_settled", (_event, ctx) => {
+  pi.on("agent_settled", () => {
     if (done || !outcome) return;
     done = true;
     clearInterval(controls);
     emit(outcome);
-    ctx.shutdown();
   });
   pi.on("session_shutdown", () => {
     if (kickoff) clearTimeout(kickoff);

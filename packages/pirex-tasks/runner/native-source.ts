@@ -7,6 +7,7 @@ import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { Store, terminal } from "../lib/store.ts";
 import { RexControl } from "../lib/rex-socket.ts";
+import { api, visibleTask } from "../lib/rex.ts";
 import { parseSpec, decodeJson, stringifyJson } from "../lib/validation.ts";
 import {
   errorMessage,
@@ -47,7 +48,9 @@ let control: RexControl | undefined,
 let child: ChildProcess | undefined,
   worker: Worker | undefined,
   tick: ReturnType<typeof setInterval> | undefined,
-  killTimer: ReturnType<typeof setTimeout> | undefined;
+  killTimer: ReturnType<typeof setTimeout> | undefined,
+  retention: ReturnType<typeof setTimeout> | undefined;
+let released = false;
 let finished = false,
   shuttingDown = false,
   stopCause: "stopped" | "timed_out" | undefined;
@@ -69,6 +72,7 @@ function output(text: string): void {
 }
 function cleanup(): void {
   if (tick) clearInterval(tick);
+  if (retention) clearTimeout(retention);
   stream?.close();
   control?.close();
 }
@@ -83,11 +87,9 @@ async function snapshot(): Promise<string> {
   Value.Assert(Type.Object({ content: Type.String() }), value);
   return value.content;
 }
-function finish(state: TaskState, code: number | null, error?: string, path?: string): void {
-  if (finished) return;
-  finished = true;
-  if (tick) clearInterval(tick);
-  store.finish(runId, stopCause || state, code, error, path);
+function release(): void {
+  if (released) return;
+  released = true;
   if (child) {
     const target = child;
     target.kill("SIGTERM");
@@ -97,7 +99,35 @@ function finish(state: TaskState, code: number | null, error?: string, path?: st
   void worker?.terminate();
   cleanup();
 }
+async function retainWhileVisible(): Promise<void> {
+  if (released) return;
+  let visible = true;
+  try {
+    const current = store.required<RunRecord>("SELECT * FROM runs WHERE id=?", runId);
+    const view = control
+      ? await control
+          .request("session.view", { session_id: row.rex_session })
+          .catch(() => api(row.rex_session, "session.view"))
+      : await api(row.rex_session, "session.view");
+    visible = visibleTask(view, runId, current.rex_source, current.rex_block);
+  } catch {}
+  if (released) return;
+  if (visible) retention = setTimeout(() => void retainWhileVisible(), 750);
+  else release();
+}
+function finish(state: TaskState, code: number | null, error?: string, path?: string): void {
+  if (finished) return;
+  finished = true;
+  if (tick) clearInterval(tick);
+  store.finish(runId, stopCause || state, code, error, path);
+  void worker?.terminate();
+  void retainWhileVisible();
+}
 function stop(cause: "stopped" | "timed_out"): void {
+  if (finished) {
+    release();
+    return;
+  }
   if (shuttingDown) return;
   shuttingDown = true;
   if (!finished) stopCause = cause;
@@ -113,14 +143,12 @@ function stop(cause: "stopped" | "timed_out"): void {
   if (worker) {
     void worker.terminate().finally(() => {
       finish(cause, null);
-      cleanup();
     });
     return;
   }
   const target = child;
   if (!target?.pid) {
     finish(cause, null);
-    cleanup();
     return;
   }
   try {
@@ -145,15 +173,15 @@ function launch(
 ): void {
   child = spawn(file, args, { cwd: spec.cwd, stdio: "inherit", env });
   child.once("error", (error) => {
+    child = undefined;
+    output(`\r\n[Task failed: ${errorMessage(error)}]\r\n`);
     finish("failed", null, errorMessage(error));
-    cleanup();
   });
   child.once("exit", (code, signal) => {
     if (killTimer) clearTimeout(killTimer);
     child = undefined;
     if (shuttingDown) {
       if (!finished) finish(stopCause || "stopped", code, signal || undefined);
-      cleanup();
     } else onExit?.(code ?? 1, signal);
   });
 }
@@ -266,7 +294,6 @@ try {
       (code) => {
         readEvents();
         if (!finished) finish("failed", code || 1, "Agent exited before completion");
-        cleanup();
       },
     );
   } else {
@@ -292,7 +319,6 @@ try {
     worker.on("error", (error) => finish("failed", null, errorMessage(error)));
     worker.on("exit", (code) => {
       if (!finished) finish("failed", code, "Workflow exited without result");
-      cleanup();
     });
   }
   if (!finished && !shuttingDown) {
@@ -325,6 +351,6 @@ try {
     }, 200);
   }
 } catch (error) {
+  output(`\r\n[Task failed: ${errorMessage(error)}]\r\n`);
   finish("failed", null, errorMessage(error));
-  cleanup();
 }

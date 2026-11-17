@@ -18,14 +18,25 @@ vi.mock("node:child_process", async (importOriginal) => {
 });
 import { Store } from "../lib/store.ts";
 import { loadConfig } from "../lib/config.ts";
-import { cleanupTerminals, closePopup, hidePopup, popupCommand, openPopup } from "../lib/rex.ts";
+import {
+  cleanupTerminals,
+  closePopup,
+  hidePopup,
+  popupCommand,
+  openPopup,
+  visibleTask,
+} from "../lib/rex.ts";
 import { Runtime } from "../lib/runtime.ts";
 import { parseSpec, stringifyJson } from "../lib/validation.ts";
 
 let store: Store;
+let visible: string[];
 beforeEach(() => {
   store = new Store(mkdtempSync(join(tmpdir(), "pirex-cleanup-")));
+  visible = [];
   rpc.mockReset().mockImplementation((method: string) => {
+    if (method === "session.view")
+      return { windows: [{ layers: [{ blocks: visible.map((block_id) => ({ block_id })) }] }] };
     if (method === "session.list_blocks")
       return {
         blocks: store.all(
@@ -72,6 +83,49 @@ describe("completed task PTY release", () => {
       rex_block: null,
     });
     expect(store.all("SELECT * FROM runs")).toHaveLength(1);
+  });
+  it("preserves visible completed source/viewer PTYs, then reclaims them after the viewer closes", async () => {
+    const row = task();
+    store.exec("UPDATE runs SET rex_block=\u0027viewer\u0027 WHERE id=?", row.run_id);
+    visible.push("viewer");
+    await cleanupTerminals(store);
+    expect(closed()).toEqual([]);
+    expect(store.task(row.owner, row.id).rex_source).toBe(row.rex_source);
+    visible = [];
+    await cleanupTerminals(store);
+    expect(closed()).toEqual(["viewer", row.rex_source]);
+  });
+  it("does not kill completed work when Rex visibility cannot be determined", async () => {
+    task();
+    rpc.mockImplementation(() => {
+      throw new Error("offline");
+    });
+    await cleanupTerminals(store);
+    expect(closed()).toEqual([]);
+  });
+  it("does not let visible completed tasks starve cleanup of hidden tasks", async () => {
+    for (let index = 0; index < 18; index++) {
+      const row = task();
+      visible.push(row.rex_source!);
+    }
+    const hidden = task();
+    await cleanupTerminals(store);
+    expect(closed()).toEqual([hidden.rex_source]);
+  });
+  it("recognizes visible labels during block-ID persistence races and ignores minimized layers", () => {
+    const row = task();
+    const view = {
+      windows: [
+        { layers: [{ blocks: [{ block_id: "new-viewer", label: `task:${row.run_id}` }] }] },
+      ],
+    };
+    expect(visibleTask(view, row.run_id)).toBe(true);
+    expect(
+      visibleTask(
+        { windows: [{ layers: [{ ...view.windows[0].layers[0], state: "minimized" }] }] },
+        row.run_id,
+      ),
+    ).toBe(false);
   });
   it("does not touch running or uncertain tasks", async () => {
     for (const state of ["running", "queued", "starting", "stop_requested", "unknown"]) {

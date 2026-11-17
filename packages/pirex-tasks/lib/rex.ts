@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { errorMessage, type RunRecord, type TaskRecord } from "./types.ts";
 import { terminal, type Store } from "./store.ts";
 import { disposeController } from "./channel.ts";
@@ -32,6 +34,59 @@ export const api = <T = unknown>(
 ): Promise<T> => rex<T>(["api", "call", "-s", session, method, stringifyJson(args)]);
 interface BlockListing {
   blocks: { block_id: string; label?: string }[];
+}
+const sessionViewSchema = Type.Object({
+  windows: Type.Optional(
+    Type.Union([
+      Type.Null(),
+      Type.Array(
+        Type.Object({
+          layers: Type.Optional(
+            Type.Union([
+              Type.Null(),
+              Type.Array(
+                Type.Object({
+                  state: Type.Optional(Type.String()),
+                  blocks: Type.Optional(
+                    Type.Union([
+                      Type.Null(),
+                      Type.Array(
+                        Type.Object({
+                          block_id: Type.Union([Type.String(), Type.Null()]),
+                          label: Type.Optional(Type.String()),
+                        }),
+                      ),
+                    ]),
+                  ),
+                }),
+              ),
+            ]),
+          ),
+        }),
+      ),
+    ]),
+  ),
+});
+export function visibleTask(
+  view: unknown,
+  runId: string,
+  source?: string | null,
+  viewer?: string | null,
+): boolean {
+  Value.Assert(sessionViewSchema, view);
+  return (view.windows || []).some((window) =>
+    (window.layers || []).some(
+      (layer) =>
+        layer.state !== "minimized" &&
+        (layer.blocks || []).some(
+          (block) =>
+            !!block.block_id &&
+            (block.block_id === source ||
+              block.block_id === viewer ||
+              block.label === `task:${runId}`),
+        ),
+    ),
+  );
 }
 const pending = new Map<string, Promise<void>>();
 const opening = new Map<string, Promise<void>>();
@@ -87,7 +142,9 @@ export async function openPopup(
   if (active) {
     await active;
     const latest = store.task(row.owner, row.id);
-    row.rex_block = terminal.has(latest.state) ? latest.rex_inspection || null : latest.rex_block;
+    row.rex_block = terminal.has(latest.state)
+      ? latest.rex_inspection || latest.rex_block
+      : latest.rex_block;
     row.rex_inspection = latest.rex_inspection;
     return;
   }
@@ -96,6 +153,19 @@ export async function openPopup(
     if (latest.run_id !== row.run_id) throw new Error("Task has a newer run; reopen it");
     Object.assign(row, latest);
     if (terminal.has(row.state)) {
+      if (
+        row.rex_source &&
+        row.rex_block &&
+        visibleTask(
+          await api(row.rex_session, "session.view"),
+          row.run_id,
+          row.rex_source,
+          row.rex_block,
+        )
+      ) {
+        await api(row.rex_session, "session.focus_block", { block_id: row.rex_block });
+        return;
+      }
       const disposing = pending.get(key);
       if (disposing) await disposing;
       await closePopup(row, store, false);
@@ -214,11 +284,21 @@ export async function cleanupTerminals(store: Store): Promise<void> {
        FROM runs r JOIN tasks t ON t.id=r.task_id
        WHERE r.state IN ('succeeded','failed','stopped','timed_out')
        AND (r.rex_source IS NOT NULL OR r.rex_block IS NOT NULL)
-       ORDER BY r.ended LIMIT 16`,
+       ORDER BY r.ended`,
     );
+    const views = new Map<string, unknown>();
+    let attempted = 0;
     for (const row of rows) {
       const key = store.root + ":" + row.run_id;
       if (opening.has(key) || pending.has(key)) continue;
+      try {
+        if (!views.has(row.rex_session))
+          views.set(row.rex_session, await api(row.rex_session, "session.view").catch(() => null));
+        const view = views.get(row.rex_session);
+        if (!view || visibleTask(view, row.run_id, row.rex_source, row.rex_block)) continue;
+      } catch {
+        continue;
+      }
       const closing = closePopup(row, store, false);
       pending.set(key, closing);
       try {
@@ -229,6 +309,7 @@ export async function cleanupTerminals(store: Store): Promise<void> {
       } finally {
         pending.delete(key);
       }
+      if (++attempted >= 16) break;
     }
   })();
   cleaning.set(store.root, request);

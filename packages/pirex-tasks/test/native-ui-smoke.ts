@@ -133,6 +133,57 @@ try {
   console.log(
     "PASS actual saved Pi session resume, no prompt replay, human conversation, hide/reopen and PTY disposal (no model calls)",
   );
+
+  const watched = rt.submit("agent", {
+    name: "Watched native Pi completion",
+    prompt: "Intercept the watched turn locally.",
+    explicitRequest: true,
+    timeoutSeconds: 30,
+  });
+  await rt.drain();
+  const watchedRow = rt.store.task(rt.owner, watched.taskId);
+  await openPopup(watchedRow, config.popup.bounds, rt.store);
+  const originalSource = watchedRow.rex_source;
+  const originalViewer = watchedRow.rex_block;
+  const watchedDeadline = Date.now() + 35000;
+  while (!terminal.has(rt.store.task(rt.owner, watched.taskId).state)) {
+    if (Date.now() > watchedDeadline) throw new Error("Watched Pi did not finish");
+    await delay(100);
+  }
+  assert.equal(rt.result(watched.taskId).state, "succeeded");
+  await screen(originalViewer!, "SCROLL_PROBE_LINE_160");
+  await rt.drain();
+  const retained = rt.store.task(rt.owner, watched.taskId);
+  await openPopup(retained, config.popup.bounds, rt.store);
+  assert.equal(retained.rex_source, originalSource);
+  assert.equal(retained.rex_block, originalViewer);
+  assert.equal(retained.rex_inspection, null);
+  const originalOutput = rt.result(watched.taskId).output?.text;
+  await api(retained.rex_session, "block.method", {
+    block_id: originalViewer,
+    method: "write",
+    args: { data: "human-in-original-pi-after-completion\r" },
+  });
+  const watchedInputs = join(root, "runs", watched.runId, "native-events.jsonl.inputs");
+  for (
+    let attempt = 0;
+    attempt < 60 &&
+    !readFileSync(watchedInputs, "utf8").includes("human-in-original-pi-after-completion");
+    attempt++
+  )
+    await delay(100);
+  assert.match(readFileSync(watchedInputs, "utf8"), /human-in-original-pi-after-completion/);
+  assert.equal(rt.result(watched.taskId).output?.text, originalOutput);
+  assert.equal(
+    rt.store.all("SELECT * FROM notification_outbox WHERE run_id=?", watched.runId).length,
+    1,
+  );
+  await hidePopup(retained);
+  await gone(originalViewer);
+  await gone(originalSource);
+  console.log(
+    "PASS watched completion keeps the original native Pi and PTYs alive until the popup closes",
+  );
 } finally {
   for (const row of rt.store.all("SELECT * FROM runs"))
     for (const block of [row.rex_source, row.rex_block, row.rex_inspection])
