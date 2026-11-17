@@ -24,6 +24,7 @@ export interface Config {
   agent_runtime: { executable: string; bootstrap_shell: string; bootstrap_args: string[] };
   notifications: { enabled: boolean; wake_parent: boolean };
   popup: { bounds: [number, number, number, number] };
+  cleanup?: { enabled: boolean; completed_ttl_seconds: number; max_retained: number };
   agents: {
     require_explicit_request: true;
     allow_nested: boolean;
@@ -82,6 +83,7 @@ export interface RunRecord {
   rex_session: string;
   rex_block: string | null;
   rex_source: string | null;
+  rex_inspection?: string | null;
   created: number;
   started: number | null;
   ended: number | null;

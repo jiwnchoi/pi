@@ -47,9 +47,9 @@ agent profiles**. `PI_CODING_AGENT_DIR` changes the parent directory;
 | `task_result` | Bounded completed result, or `ready: false` immediately                   |
 | `task_logs`   | Bounded output, default 16 KiB, maximum 50 KiB                            |
 | `task_stop`   | Request termination; does not wait for it                                 |
-| `task_open`   | Open the actual task terminal as a floating Rex popup                     |
-| `task_hide`   | Detach the popup without stopping its task                                |
-| `task_close`  | Dispose a completed task's terminal; durable results remain               |
+| `task_open`   | Open a live terminal, completed logs, or a saved Pi session               |
+| `task_hide`   | Close the disposable viewer without stopping its task                     |
+| `task_close`  | Close a completed task inspection; durable results remain                 |
 
 All execution calls are asynchronous. They acknowledge **durable admission**, not
 successful execution. Queued tasks start as capacity becomes available. There is
@@ -82,18 +82,23 @@ Click a task in the above-editor dock in fullscreen Pi, or use:
 /rex-tasks close <task-id>
 ```
 
-The dock is one compact line of status counts and `Shift↓`, with no task commands or paths. **Shift+Down** opens a centered TUI picker; use Up/Down and Enter to open a task in Rex, `k` to request stop for the selected task, `c` to clear a selected completed task, or Escape to cancel. `/task-kill` requests stop for all active tasks belonging to the current session. `/task-clear` removes all completed tasks from that session's list, without deleting task records, logs, or retained consoles; it never clears running work. Tool calls and receipts share one row, such as `queued · Build`. Clicking a task row opens its actual interactive Rex terminal popup. Completion messages stay compact.
+The dock is one compact line of status counts and `Shift↓`, with no task commands or paths. **Shift+Down** opens a centered TUI picker; use Up/Down and Enter to open a task in Rex, `k` to request stop for the selected task, `c` to clear a selected completed task, or Escape to cancel. `/task-kill` requests stop for all active tasks belonging to the current session. `/task-clear` removes all completed tasks from that session's list, without deleting task records, logs, or saved Pi sessions; it never clears running work. Tool calls and receipts share one row, such as `queued · Build`. Clicking a task row opens its live terminal, completed log view, or saved Pi session. Completion messages stay compact.
 
 A shell task uses a real PTY, not a replayed log. Input, arrow keys, CLI selections,
 password prompts, Ctrl+C and terminal resize reach the actual program. Output is
 logged; raw keystrokes are not. As with any terminal, echoed input can appear in
 output; do not print secrets in commands or expect logs to redact application output.
 
-**Ctrl+] hides the popup and restores parent focus**, without stopping the program. **Rex's X is also safe:** it closes only the disposable viewer, not the task. Opening the task again creates another viewer attached to the same live PTY or agent. Commands are never re-executed to recreate a popup.
+**While a task is running, Ctrl+] hides the popup and restores parent focus**, closing its disposable viewer PTY without stopping the program. Viewers are created only when opened, not when a task starts. **Rex's X is also safe for running tasks:** it closes only the disposable viewer, not the task. Reopening a running task reconnects to the same live PTY. Commands are never re-executed to recreate a popup.
 Popups are created directly with `session.new_layer`: opening one never splits or resizes the parent terminal, and preserves its tiled layout and zoom. The dock uses semantic status colors; the bordered task picker uses 90% of terminal width and an expanded, screen-relative height. Non-selectable dividers group tasks in running, queued, failed, then done order, sorting each group by the most recent state change first (not heartbeat or log activity). Starting/stopping tasks appear under running; timed-out/unknown tasks under failed; stopped tasks under done. Task names use the full popup width and wrap onto additional lines instead of displaying a duplicate status column. Click any task line to open it, or use the mouse wheel to change selection in fullscreen Pi.
 
-Top-level shell tasks execute the admitted command once, record its exit status and output snapshot, then leave a real interactive zsh/bash in the same PTY. Users can continue entering commands; these do not overwrite the original task result or send extra completion notifications. Workflow-child shells exit normally. Agent controllers retain the real native Pi TUI with unrestricted human conversation after the delegated turn. `task_close` explicitly terminates the retained console (including any user-started activity) and its viewer; resuming an agent does the same before reusing the saved session. Completed output can also be reopened from bounded raw log replay. No automatic cleanup deletes running work. Development servers remain running until stopped;
-readiness is not the same as task completion.
+**Completed tasks retain no execution or viewer PTY.** Shell commands execute once, save their exit status and output snapshot, then exit without starting an interactive shell. Agents save their final result and Pi session, then exit at final settlement. Success, failure, stop and timeout all release the source and any open live viewer. A background sweep also closes leftover completed-run terminals from older versions, including visible ones, while leaving running/uncertain work untouched.
+
+Opening a completed shell/workflow (or an agent without a saved session) shows a scrollable, read-only overlay inside Pi: no Rex terminal or PTY is allocated. Arrow keys, Page Up/Down, Home/End and the mouse wheel navigate the saved output; Escape or `q` closes it. The view shows up to the last 50 KiB and identifies the full output file when truncated.
+
+Opening a completed agent starts Pi on its saved session, on demand, in a separate floating terminal. It does not load the delegated bridge, resend the task prompt, create another task run, or overwrite the original result/notification. This inspection PTY exists only while the user keeps the reopened Pi session open. X, `task_hide`, `task_close`, or exiting Pi terminates that inspection; reopening restores the saved conversation. A new delegated `task_agent` resume closes any inspection first before reusing the same session file. Closing an inspection also stops any activity started in that inspection, unlike hiding a live-task viewer.
+
+Development servers remain running until stopped; readiness is not the same as task completion.
 
 ## User-defined agents
 
@@ -165,7 +170,7 @@ preserved on resume; disabling inheritance does not erase earlier messages.
 A new run records each attempt; old results are not overwritten. This is not an
 exact fork of the parent's full session.
 
-The terminal contains the **actual native Pi TUI running in a real PTY**. Input and terminal resize go directly to Pi. The internal extension reports lifecycle and steering acknowledgements through private files/SQLite. The child's configured extensions, MCP servers, skills and prompt templates load normally. Its delegated turn reports completion once; subsequent user-entered turns stay in the same saved Pi session without overwriting the original task result. The `agents.allow_nested` setting is retained for configuration compatibility and is not enforced. Tool allowlists are capability conveniences, not OS sandboxes.
+The terminal contains the **actual native Pi TUI running in a real PTY** while delegated work runs. Input and terminal resize go directly to Pi. The internal extension reports lifecycle and steering acknowledgements through private files/SQLite, and only final settlement reports completion. The child's configured extensions, MCP servers, skills and prompt templates load normally. After completion the PTY exits; opening the task again restores its saved Pi session without automatically sending a prompt. The `agents.allow_nested` setting is retained for configuration compatibility and is not enforced. Tool allowlists are capability conveniences, not OS sandboxes.
 
 The default agent bootstrap reads `.zshrc`. For an actual `pi` binary without an
 alias, a simpler bootstrap can be configured:
@@ -226,7 +231,7 @@ WAL, foreign keys, short immediate transactions and a busy timeout support
 multiple parent Pi processes and runners. Logs, raw agent events and large results
 are files under `runs/<run-id>/`. Storage is private to the current OS user.
 
-Each new task runs inside a detached Rex-native source block. Its shell, Pi TUI, or workflow runs directly on that block's native terminal. A separate disposable floating viewer connects through the Rex Unix socket: `data.connect` streams the native screen/output, while control requests forward input and terminal resize. Initial VT state includes alternate screen, keyboard/mouse modes, cursor and scroll regions. Closing X kills only the viewer, never the source block; opening it again reconnects to the same execution without raw-log replay. Parent Esc, session switch, `/reload` and Pi exit do not kill admitted tasks. Source heartbeats and native block process state reconcile execution independently of viewer existence. Existing tasks keep their older runtime until completion; no in-place task restart occurs. A transport error is not proof of execution failure; an
+Each new task runs inside a detached Rex-native source block. Its shell, Pi TUI, or workflow runs directly on that block's native terminal. A separate disposable floating viewer connects through the Rex Unix socket: `data.connect` streams the native screen/output, while control requests forward input and terminal resize. Initial VT state includes alternate screen, keyboard/mouse modes, cursor and scroll regions. Closing X kills only the viewer, never the source block; opening a running task again reconnects to the same execution without raw-log replay. Completed sources/viewers exit, and subsequent opens use saved logs or an independently tracked Pi inspection session. Parent Esc, session switch, `/reload` and Pi exit do not kill admitted tasks. Source heartbeats and native block process state reconcile execution independently of viewer existence. Existing tasks keep their older runtime until completion; no in-place task restart occurs. A transport error is not proof of execution failure; an
 uncertain launch is not automatically retried. Missing blocks are reported as
 failure, never silently rerun.
 
@@ -246,7 +251,7 @@ Daemonizing programs outside the task's process group are not tracked.
 Trusted project `.pi/pirex-tasks.toml` overlays global settings. Untrusted project
 config is ignored. Paths in profiles resolve relative to the declaring TOML file.
 Typos and invalid values fail with an error instead of silently changing behavior.
-Existing tasks retain their configuration snapshot.
+Existing tasks retain their configuration snapshot. Completed-run PTY release is unconditional, not a TTL or retention-count policy. The recovery sweep checks up to 16 completed runs per maintenance tick across Pi sessions sharing the task storage, retries failed closes, and preserves explicitly reopened inspection sessions. Legacy `[cleanup]` fields remain accepted for stored-spec/config compatibility but no longer retain completed terminals.
 
 ## Development / verification
 
@@ -267,4 +272,4 @@ node packages/pirex-tasks/test/rex-smoke.ts
 PIREX_TEST_POPUP=1 node packages/pirex-tasks/test/rex-smoke.ts
 ```
 
-The smoke creates and cleans up only its own Rex blocks. Its agent fixture asserts real TTY stdin/stdout and absence of RPC mode, and tests keyboard input, steering, native-console retention and resume without LLM calls. `node test/native-ui-smoke.ts` additionally launches the actual Pi alias in native TUI mode; a test-only input interceptor prevents all model calls while verifying UI rendering, quiet startup and popup reconnection.
+The smoke creates and cleans up only its own Rex blocks. Its agent fixture asserts real TTY stdin/stdout and absence of RPC mode, and tests keyboard input, steering, automatic completed-PTY release, on-demand inspection, prompt non-replay and resume without LLM calls. `node test/native-ui-smoke.ts` additionally launches the actual Pi alias in native TUI mode; a test-only input interceptor prevents all model calls while verifying UI rendering, quiet startup and popup reconnection.

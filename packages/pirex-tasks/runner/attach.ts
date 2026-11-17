@@ -1,7 +1,7 @@
 import { createConnection, type Socket } from "node:net";
 import { StringDecoder } from "node:string_decoder";
 import { Store, terminal } from "../lib/store.ts";
-import { replay, socketPath } from "../lib/channel.ts";
+import { socketPath } from "../lib/channel.ts";
 import { parseSpec, stringifyJson } from "../lib/validation.ts";
 import { api } from "../lib/rex.ts";
 import type { RunRecord } from "../lib/types.ts";
@@ -20,7 +20,6 @@ if (spec.executionMode === "rex-native") {
   const persistentConsole = !!spec.agent || !!spec.persistentShell;
   let socket: Socket | undefined,
     connecting = false,
-    displayed = false,
     ended = false;
   let nativeUnavailable = false;
   const decoder = new StringDecoder("utf8");
@@ -30,9 +29,9 @@ if (spec.executionMode === "rex-native") {
   };
   const hide = async (): Promise<void> => {
     const block = process.env.REX_BLOCK;
-    if (block) await api(row.rex_session, "session.detach_block", { block_id: block });
     if (spec.anchor)
       await api(row.rex_session, "session.focus_block", { block_id: spec.anchor }).catch(() => {});
+    if (block) await api(row.rex_session, "block.close", { block_id: block });
   };
   const resize = (): void =>
     send({
@@ -47,7 +46,6 @@ if (spec.executionMode === "rex-native") {
     socket = client;
     client.on("connect", () => {
       connecting = false;
-      displayed = true;
       process.stdout.write("\x1bc");
       send({ type: "attach" });
       resize();
@@ -72,11 +70,8 @@ if (spec.executionMode === "rex-native") {
     row = store.required<RunRecord>("SELECT * FROM runs WHERE id=?", runId);
     if (terminal.has(row.state)) {
       ended = true;
-      if (persistentConsole && !nativeUnavailable) connect();
-      else if (!displayed) {
-        process.stdout.write(replay(row.log_path));
-        displayed = true;
-      }
+      dispose();
+      process.exit(0);
     } else connect();
   };
   if (process.stdin.isTTY) process.stdin.setRawMode(true);

@@ -4,7 +4,6 @@ import { StringDecoder } from "node:string_decoder";
 import type WebSocket from "ws";
 import { RexControl } from "../lib/rex-socket.ts";
 import { Store, terminal } from "../lib/store.ts";
-import { readBounded } from "../lib/runtime.ts";
 import { parseSpec } from "../lib/validation.ts";
 import { api } from "../lib/rex.ts";
 import type { RunRecord } from "../lib/types.ts";
@@ -143,8 +142,8 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
   async function connect(): Promise<void> {
     if (disposed) return;
     row = store.required<RunRecord>("SELECT * FROM runs WHERE id=?", run);
-    if (!row.rex_source && terminal.has(row.state)) {
-      write("\x1bc" + readBounded(row.result_path || row.log_path, 51200).text);
+    if (terminal.has(row.state)) {
+      dispose();
       return;
     }
     initial = true;
@@ -192,10 +191,10 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
     const text = decoder.write(bytes);
     if (text.includes("\x1d"))
       void (async () => {
-        if (process.env.REX_BLOCK)
-          await api(row.rex_session, "session.detach_block", { block_id: process.env.REX_BLOCK });
         if (spec.anchor)
           await api(row.rex_session, "session.focus_block", { block_id: spec.anchor });
+        if (process.env.REX_BLOCK)
+          await api(row.rex_session, "block.close", { block_id: process.env.REX_BLOCK });
       })().catch(() => {});
     const input = text.replaceAll("\x1d", "");
     if (input && !ready) pendingInput = (pendingInput + input).slice(-65536);
@@ -216,6 +215,7 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
     if (disposed) return;
     disposed = true;
     if (reconnect) clearTimeout(reconnect);
+    clearInterval(completion);
     teardown();
     try {
       if (process.stdin.isTTY) process.stdin.setRawMode(false);
@@ -223,6 +223,10 @@ export async function nativeViewer(root: string, run: string): Promise<void> {
     store.close();
     process.exit(0);
   };
+  const completion = setInterval(() => {
+    row = store.required<RunRecord>("SELECT * FROM runs WHERE id=?", run);
+    if (terminal.has(row.state)) dispose();
+  }, 200);
   process.stdout.on("drain", () => {
     if (!restoring) stream?.resume();
   });

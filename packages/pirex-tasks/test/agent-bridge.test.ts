@@ -46,6 +46,8 @@ function bridge() {
     ) => Promise<void>;
   const ctx = {
     mode: "tui",
+    hasPendingMessages: () => false,
+    shutdown: vi.fn(),
     model: { provider: "saved", id: "saved-model" },
     modelRegistry: { find: vi.fn(() => ({ provider: "current", id: "current-model" })) },
   } as unknown as ExtensionContext;
@@ -58,6 +60,22 @@ function bridge() {
 }
 
 describe("child startup settings", () => {
+  it("reports completion only at final settlement, then exits the delegated Pi", async () => {
+    const { events, handler, ctx } = bridge();
+    await handler("session_start")({}, ctx);
+    const message = {
+      role: "assistant",
+      content: [{ type: "text", text: "Saved final result" }],
+      stopReason: "stop",
+    };
+    await handler("agent_end")({ messages: [message] }, ctx);
+    expect(readBounded(events).text).not.toContain('"type":"settled"');
+    await handler("agent_settled")({}, ctx);
+    expect(readBounded(events).text).toContain("Saved final result");
+    expect(ctx.shutdown).toHaveBeenCalledOnce();
+    await handler("agent_settled")({}, ctx);
+    expect(ctx.shutdown).toHaveBeenCalledOnce();
+  });
   it("awaits restored model selection and applies thinking before admitting the delegated prompt", async () => {
     const { runtime, task, events, handler, ctx, setModel, setThinkingLevel, sendUserMessage } =
       bridge();

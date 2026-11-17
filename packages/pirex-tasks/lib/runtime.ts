@@ -14,7 +14,7 @@ import { probeController, disposeController } from "./channel.ts";
 import { fileURLToPath } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import { Store, terminal } from "./store.ts";
-import { api, ensurePopup } from "./rex.ts";
+import { api, cleanupTerminals, closePopup } from "./rex.ts";
 import { validateCwd } from "./config.ts";
 import type {
   TaskRecord,
@@ -59,7 +59,7 @@ export function receipt(row: TaskRecord): TaskReceipt {
     kind: row.kind,
     name: row.name,
     state: row.state,
-    rexBlockId: row.rex_block,
+    rexBlockId: row.rex_inspection || row.rex_block,
     outputPath: row.log_path,
   };
 }
@@ -155,7 +155,7 @@ export class Runtime {
     }
     const spec: TaskSpec = {
       executionMode: "rex-native",
-      persistentShell: kind === "shell" && !parentRun,
+      persistentShell: false,
       resumeRunId,
       cwd,
       command: input.command,
@@ -186,6 +186,7 @@ export class Runtime {
     if (this.launching || this.closed) return;
     this.launching = true;
     try {
+      await cleanupTerminals(this.store);
       const rows = this.store.all(
         `SELECT r.* FROM runs r JOIN tasks t ON r.task_id=t.id WHERE t.owner=? AND r.state='queued' ORDER BY r.created`,
         this.owner,
@@ -200,9 +201,15 @@ export class Runtime {
                 "SELECT * FROM runs WHERE id=?",
                 spec.resumeRunId,
               );
-              if (previous.rex_source)
-                await api(previous.rex_session, "block.close", { block_id: previous.rex_source });
-              else await disposeController(this.store.root, spec.resumeRunId);
+              await closePopup(
+                {
+                  ...this.store.task(this.owner, row.task_id),
+                  ...previous,
+                  id: previous.task_id,
+                  run_id: previous.id,
+                },
+                this.store,
+              );
             }
             const result = await api<{ block_id: string | null }>(
               row.rex_session,
@@ -220,15 +227,12 @@ export class Runtime {
                     this.store.root,
                     row.id,
                   ],
-                  exit: { on_completion: false },
+                  exit: { on_completion: true, quick_exit_threshold_ms: 0 },
                 },
               },
             );
             if (!result.block_id) throw new Error("Rex returned no native execution block");
             this.store.exec("UPDATE runs SET rex_source=? WHERE id=?", result.block_id, row.id);
-            await ensurePopup(this.store.task(this.owner, row.task_id), this.store).catch((error) =>
-              this.store.event(row.id, "viewer_unavailable", { error: errorMessage(error) }),
-            );
           } catch (error) {
             this.store.exec(
               "UPDATE runs SET state='unknown',error=? WHERE id=? AND state='starting'",
@@ -270,11 +274,6 @@ export class Runtime {
           continue;
         } finally {
           if (descriptor !== undefined) closeSync(descriptor);
-        }
-        try {
-          await ensurePopup(this.store.task(this.owner, row.task_id), this.store);
-        } catch (error) {
-          this.store.event(row.id, "viewer_unavailable", { error: errorMessage(error) });
         }
       }
     } finally {

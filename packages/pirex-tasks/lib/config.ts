@@ -95,6 +95,16 @@ export const configSchema = Type.Object(
       { bounds: Type.Tuple([Type.Number(), Type.Number(), Type.Number(), Type.Number()]) },
       { additionalProperties: false },
     ),
+    cleanup: Type.Optional(
+      Type.Object(
+        {
+          enabled: Type.Boolean(),
+          completed_ttl_seconds: Type.Integer({ minimum: 0 }),
+          max_retained: Type.Integer({ minimum: 0 }),
+        },
+        { additionalProperties: false },
+      ),
+    ),
     agents: Type.Object(
       {
         require_explicit_request: Type.Literal(true),

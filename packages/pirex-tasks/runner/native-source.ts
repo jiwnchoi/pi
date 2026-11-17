@@ -69,7 +69,6 @@ function output(text: string): void {
 }
 function cleanup(): void {
   if (tick) clearInterval(tick);
-  if (killTimer) clearTimeout(killTimer);
   stream?.close();
   control?.close();
 }
@@ -89,7 +88,14 @@ function finish(state: TaskState, code: number | null, error?: string, path?: st
   finished = true;
   if (tick) clearInterval(tick);
   store.finish(runId, stopCause || state, code, error, path);
-  if (stopCause || (!spec.persistentShell && task.kind !== "agent")) cleanup();
+  if (child) {
+    const target = child;
+    target.kill("SIGTERM");
+    killTimer = setTimeout(() => target.kill("SIGKILL"), 3000);
+    killTimer.unref();
+  }
+  void worker?.terminate();
+  cleanup();
 }
 function stop(cause: "stopped" | "timed_out"): void {
   if (shuttingDown) return;
@@ -220,9 +226,6 @@ try {
               signal || undefined,
               resultPath,
             );
-            if (spec.persistentShell && !shuttingDown)
-              launch(spec.config.execution.shell, ["-li"], process.env, () => cleanup());
-            else cleanup();
           })
           .catch((error) => {
             store.event(runId, "terminal_snapshot_failed", { error: errorMessage(error) });
@@ -232,9 +235,6 @@ try {
               signal || undefined,
               row.log_path,
             );
-            if (spec.persistentShell && !shuttingDown)
-              launch(spec.config.execution.shell, ["-li"], process.env, () => cleanup());
-            else cleanup();
           });
       },
     );

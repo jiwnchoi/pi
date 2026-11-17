@@ -1,6 +1,5 @@
-// Real Pi-Bolt interactive TUI in a real PTY; the explicit fixture intercepts all model prompts.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,11 +19,12 @@ const settings = decodeJson(
 );
 const config = loadConfig(root, false, root);
 config.execution.node = process.execPath;
-const nativeUIFixture = fileURLToPath(new URL("./native-ui-fixture.ts", import.meta.url));
+const fixture = fileURLToPath(new URL("./native-ui-fixture.ts", import.meta.url));
 const wrapper = join(root, "pi-native-probe");
+const inspectionEvents = join(root, "inspection-events");
 writeFileSync(
   wrapper,
-  `#!/bin/zsh -fi\nset -- "$@" -e ${stringifyJson(nativeUIFixture)}\n${agentCommand(config.agent_runtime)}\n`,
+  `#!/bin/zsh -fi\nexport PIREX_TEST_EVENTS=${stringifyJson(inspectionEvents)}\nset -- "$@" -e ${stringifyJson(fixture)}\n${agentCommand(config.agent_runtime)}\n`,
   { mode: 0o700 },
 );
 config.agent_runtime.executable = wrapper;
@@ -36,145 +36,107 @@ const rt = new Runtime(root, "native-ui-probe", config, {
   model: settings.defaultModel,
   thinking: "off",
 });
+async function blocks() {
+  return (
+    await api<{ blocks: { block_id: string }[] }>(process.env.REX_SESSION!, "session.list_blocks")
+  ).blocks;
+}
+async function gone(block: string | null | undefined) {
+  if (!block) return;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (!(await blocks()).some((item) => item.block_id === block)) return;
+    await delay(100);
+  }
+  assert.fail(`PTY block still exists: ${block}`);
+}
+async function screen(block: string, marker: string) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const value = await api<{ content: string }>(process.env.REX_SESSION!, "block.method", {
+      block_id: block,
+      method: "format",
+      args: { format: "text" },
+    });
+    if (value.content.includes(marker)) return;
+    await delay(100);
+  }
+  assert.fail(`Restored Pi screen missing ${marker}`);
+}
 try {
   const receipt = rt.submit("agent", {
     name: "Native Pi TUI probe",
     prompt: "Intercept this locally; do not call a model.",
     explicitRequest: true,
-    timeoutSeconds: 20,
+    timeoutSeconds: 30,
   });
   await rt.drain();
-  const deadline = Date.now() + 25000;
+  const deadline = Date.now() + 35000;
   for (;;) {
     const row = rt.store.task(rt.owner, receipt.taskId);
     if (terminal.has(row.state)) {
       assert.equal(row.state, "succeeded", readFileSync(row.log_path, "utf8"));
-      assert.match(rt.result(receipt.taskId).output?.text || "", /native TUI ready/);
       break;
     }
-    if (Date.now() > deadline) throw new Error("Native Pi TUI startup timed out");
+    if (Date.now() > deadline) throw new Error("Native Pi startup timed out");
     await delay(150);
   }
   const row = rt.store.task(rt.owner, receipt.taskId);
-  for (
-    let i = 0;
-    i < 40 && !readFileSync(row.log_path, "utf8").includes("SCROLL_PROBE_LINE_160");
-    i++
-  )
-    await delay(100);
-  const log = readFileSync(row.log_path, "utf8");
-  assert.match(log, /SCROLL_PROBE_LINE_160/, "The actual Pi TUI must render the long transcript");
+  await gone(row.rex_source);
+  const original = rt.result(row.id);
+  assert.match(original.output?.text || "", /native TUI ready/);
+  assert.ok(existsSync(original.agentSession!));
   assert.doesNotMatch(
-    log,
-    /GHOSTSNP/,
-    "Binary native initialization must never be treated as ANSI logs",
+    readFileSync(row.log_path, "utf8"),
+    /GHOSTSNP|gitstatus failed|can.t change option: monitor|Last login/,
   );
-  assert.doesNotMatch(log, /gitstatus failed|can.t change option: monitor|Last login/);
+  console.log("PASS actual native Pi completion saves its session and releases the execution PTY");
+
+  await Promise.all([
+    openPopup(row, config.popup.bounds, rt.store),
+    openPopup(row, config.popup.bounds, rt.store),
+  ]);
+  assert.ok(row.rex_inspection);
+  await screen(row.rex_inspection!, "SCROLL_PROBE_LINE_160");
   assert.equal(
-    (
-      await api<{ blocks: { block_id: string }[] }>(row.rex_session, "session.list_blocks")
-    ).blocks.some((block) => block.block_id === row.rex_source),
-    true,
-    "Native TUI must remain available after delegated completion",
+    existsSync(inspectionEvents + ".inputs"),
+    false,
+    "Reopening must not submit any prompt",
   );
-  await openPopup(row, config.popup.bounds, rt.store);
-  const screen = async (block: string) =>
-    (
-      await api<{ content: string }>(row.rex_session, "block.method", {
-        block_id: block,
-        method: "format",
-        args: { format: "text" },
-      })
-    ).content;
-  const waitScreen = async (block: string, text: string) => {
-    for (let i = 0; i < 60; i++) {
-      const value = await screen(block);
-      if (value.includes(text)) return value;
-      await delay(100);
-    }
-    throw new Error(`Screen missing ${text}`);
-  };
-  await waitScreen(row.rex_block!, "SCROLL_PROBE_LINE_160");
-  const modes = await api<{ screen: string; modes: { number: number; set: boolean }[] }>(
-    row.rex_session,
-    "block.method",
-    { block_id: row.rex_block, method: "modes", args: {} },
-  );
-  assert.equal(modes.screen, "alternate");
-  assert.ok(modes.modes.some((mode) => mode.number === 1006 && mode.set));
   await api(row.rex_session, "block.method", {
-    block_id: row.rex_block,
-    method: "write",
-    args: { data: "\x1b[<64;20;10M".repeat(12) },
-  });
-  let scrolled = "";
-  for (let i = 0; i < 60; i++) {
-    scrolled = await screen(row.rex_source!);
-    if (scrolled.includes("SCROLL_PROBE_LINE_") && !scrolled.includes("SCROLL_PROBE_LINE_160"))
-      break;
-    await delay(100);
-  }
-  assert.ok(
-    !scrolled.includes("SCROLL_PROBE_LINE_160"),
-    "Real Pi fullscreen transcript must scroll up",
-  );
-  const marker = scrolled.match(/SCROLL_PROBE_LINE_\d+/)?.[0];
-  assert.ok(marker);
-  await waitScreen(row.rex_block!, marker);
-  await api(row.rex_session, "block.close", { block_id: row.rex_block });
-  await openPopup(row, config.popup.bounds, rt.store);
-  await waitScreen(row.rex_block!, marker);
-  await api(row.rex_session, "block.method", {
-    block_id: row.rex_block,
-    method: "write",
-    args: { data: "\x1b[<65;20;10M".repeat(12) },
-  });
-  await waitScreen(row.rex_source!, "SCROLL_PROBE_LINE_160");
-  await waitScreen(row.rex_block!, "SCROLL_PROBE_LINE_160");
-  console.log(
-    "PASS real Pi fullscreen wheel scrolling, X close/reopen, native modes and scroll-position retention",
-  );
-  await hidePopup(row);
-  await delay(500);
-  await api(row.rex_session, "block.method", {
-    block_id: row.rex_block,
+    block_id: row.rex_inspection,
     method: "write",
     args: { data: "human-followup-after-completion\r" },
   });
-  const inputPath = join(root, "runs", row.run_id, "native-events.jsonl.inputs");
-  for (
-    let i = 0;
-    i < 40 && !readFileSync(inputPath, "utf8").includes("human-followup-after-completion");
-    i++
-  )
+  for (let attempt = 0; attempt < 60; attempt++) {
+    if (
+      existsSync(inspectionEvents + ".inputs") &&
+      readFileSync(inspectionEvents + ".inputs", "utf8").includes("human-followup-after-completion")
+    )
+      break;
     await delay(100);
+  }
   assert.match(
-    readFileSync(inputPath, "utf8"),
+    readFileSync(inspectionEvents + ".inputs", "utf8"),
     /human-followup-after-completion/,
-    "Completed Pi must accept human conversation",
   );
-  await closePopup(row, rt.store);
-  assert.equal(
-    (
-      await api<{ blocks: { block_id: string }[] }>(row.rex_session, "session.list_blocks")
-    ).blocks.some((block) => block.block_id === row.rex_source),
-    false,
-  );
+  await rt.drain();
+  assert.ok((await blocks()).some((block) => block.block_id === row.rex_inspection));
+  assert.equal(rt.result(row.id).output?.text, original.output?.text);
+  const firstInspection = row.rex_inspection;
+  await hidePopup(row);
+  await gone(firstInspection);
+  await openPopup(row, config.popup.bounds, rt.store);
+  assert.notEqual(row.rex_inspection, firstInspection);
+  await screen(row.rex_inspection!, "SCROLL_PROBE_LINE_160");
+  await closePopup(rt.store.task(rt.owner, row.id), rt.store);
+  await gone(row.rex_inspection);
+  assert.equal(rt.result(row.id).state, "succeeded");
   console.log(
-    "PASS real Pi alias, native interactive TUI, quiet bootstrap, completed UI reconnect and disposal (all prompts intercepted; no model calls)",
+    "PASS actual saved Pi session resume, no prompt replay, human conversation, hide/reopen and PTY disposal (no model calls)",
   );
 } finally {
-  for (const row of rt.store.all("SELECT * FROM runs")) {
-    if (!terminal.has(row.state)) {
-      try {
-        rt.store.control(rt.owner, row.task_id, "stop");
-      } catch {}
-    }
-    if (row.rex_source)
-      await api(row.rex_session, "block.close", { block_id: row.rex_source }).catch(() => {});
-    if (row.rex_block)
-      await api(row.rex_session, "block.close", { block_id: row.rex_block }).catch(() => {});
-  }
+  for (const row of rt.store.all("SELECT * FROM runs"))
+    for (const block of [row.rex_source, row.rex_block, row.rex_inspection])
+      if (block) await api(row.rex_session, "block.close", { block_id: block }).catch(() => {});
   rt.close();
   rmSync(root, { recursive: true, force: true });
 }

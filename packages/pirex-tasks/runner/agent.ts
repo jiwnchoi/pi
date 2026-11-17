@@ -37,14 +37,18 @@ else
   exec "$pirex_executable" "$@"
 fi`;
 }
-export function agentArgs(spec: TaskSpec, sessionPath: string, systemPath: string): string[] {
+export function agentArgs(
+  spec: TaskSpec,
+  sessionPath: string,
+  systemPath: string,
+  delegated = true,
+): string[] {
   const agent = spec.agent;
   if (!agent?.provider || !agent.model) throw new Error("Agent model settings missing");
   const args = [
     "--session",
     sessionPath,
-    "-e",
-    fileURLToPath(new URL("./agent-bridge.ts", import.meta.url)),
+    ...(delegated ? ["-e", fileURLToPath(new URL("./agent-bridge.ts", import.meta.url))] : []),
     "--provider",
     agent.provider,
     "--model",

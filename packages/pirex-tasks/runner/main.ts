@@ -68,9 +68,10 @@ const finish = (
   finished = true;
   if (heartbeat) clearInterval(heartbeat);
   store.finish(runId, stopCause || state, code, error, resultPath);
-  if ((agent?.isAlive() || (spec.persistentShell && shell?.isAlive())) && !stopCause) return; // Retain the real Pi TUI for inspection until explicit close/resume.
-  agent?.dispose();
-  shell?.dispose();
+  if (agent?.isAlive()) agent.stop();
+  else agent?.dispose();
+  if (shell?.isAlive()) shell.stop();
+  else shell?.dispose();
 
   hub.close();
   if (worker) void worker.terminate();

@@ -85,6 +85,22 @@ export class Store {
           throw error;
       }
     }
+    if (
+      !this.all<{ name: string }>("PRAGMA table_info(runs)").some(
+        (column) => column.name === "rex_inspection",
+      )
+    ) {
+      try {
+        this.db.exec("ALTER TABLE runs ADD COLUMN rex_inspection TEXT");
+      } catch (error) {
+        if (
+          !this.all<{ name: string }>("PRAGMA table_info(runs)").some(
+            (column) => column.name === "rex_inspection",
+          )
+        )
+          throw error;
+      }
+    }
     chmodSync(join(root, "tasks.sqlite"), 0o600);
   }
   stmt(sql: string): Statement {
@@ -183,7 +199,7 @@ export class Store {
   task(owner: string, id: string): TaskRecord {
     const row = this.get<TaskRecord>(
       `SELECT t.*,r.id run_id,r.state,r.spec,r.rex_session,r.rex_block,r.started,r.ended,
-      r.heartbeat,r.exit_code,r.error,r.result_path,r.log_path,r.parent_run,r.rex_source,${stateChanged}
+      r.heartbeat,r.exit_code,r.error,r.result_path,r.log_path,r.parent_run,r.rex_source,r.rex_inspection,${stateChanged}
       FROM tasks t JOIN runs r ON r.id=t.current_run WHERE t.owner=? AND t.id=?`,
       owner,
       id,
@@ -193,7 +209,7 @@ export class Store {
   }
   list(owner: string): TaskRecord[] {
     return this.all<TaskRecord>(
-      `SELECT t.*,r.id run_id,r.state,r.spec,r.rex_block,r.rex_session,r.started,r.ended,r.exit_code,r.error,r.log_path,r.result_path,r.heartbeat,r.parent_run,r.rex_source,${stateChanged}
+      `SELECT t.*,r.id run_id,r.state,r.spec,r.rex_block,r.rex_session,r.started,r.ended,r.exit_code,r.error,r.log_path,r.result_path,r.heartbeat,r.parent_run,r.rex_source,r.rex_inspection,${stateChanged}
       FROM tasks t JOIN runs r ON r.id=t.current_run WHERE t.owner=? AND t.hidden=0 ORDER BY t.created DESC LIMIT 100`,
       owner,
     );

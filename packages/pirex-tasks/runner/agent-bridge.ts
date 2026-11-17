@@ -35,6 +35,7 @@ export default function agentBridge(pi: ExtensionAPI): void {
     spec = parseSpec(store.required("SELECT * FROM runs WHERE id=?", run));
   let done = false;
   let started = false;
+  let outcome: { type: "settled"; text: string; error?: string } | undefined;
   const emit = (event: unknown) =>
     appendFileSync(path, stringifyJson(event) + "\n", { mode: 0o600 });
   let kickoff: ReturnType<typeof setTimeout> | undefined;
@@ -93,12 +94,15 @@ export default function agentBridge(pi: ExtensionAPI): void {
       : ["error", "aborted"].includes(message.stopReason)
         ? message.errorMessage || message.stopReason
         : undefined;
+    outcome = { type: "settled", text, error };
+  });
+  pi.on("agent_settled", (_event, ctx) => {
+    if (done || !outcome) return;
     done = true;
     clearInterval(controls);
-    emit({ type: "settled", text, error });
+    emit(outcome);
+    ctx.shutdown();
   });
-  // The original delegated turn reports once. Subsequent human-entered turns remain
-  // ordinary Pi conversation in the same session, without duplicate parent notifications.
   pi.on("session_shutdown", () => {
     if (kickoff) clearTimeout(kickoff);
     clearInterval(controls);

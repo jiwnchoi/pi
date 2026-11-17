@@ -114,4 +114,22 @@ it("refreshes model, provider and thinking from every invoking tool context, inc
     model: "current-model",
     thinking: "max",
   });
+  rt.store.finish(workflow.details.runId, "succeeded", 0);
+  const custom = vi.fn(() => new Promise(() => {}));
+  const interactive = {
+    ...ctx,
+    mode: "tui",
+    ui: { ...ctx.ui, custom },
+  } as unknown as ExtensionToolContext;
+  const open = registerTool.mock.calls.find(([tool]) => tool.name === "task_open")![0];
+  const opened = await open.execute(
+    "open",
+    { taskId: workflow.details.taskId },
+    undefined,
+    undefined,
+    interactive,
+  );
+  expect(opened.details.state).toBe("opened");
+  expect(custom).toHaveBeenCalledOnce();
+  expect(rt.store.task(rt.owner, workflow.details.taskId).rex_block).toBeNull();
 });

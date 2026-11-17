@@ -103,6 +103,13 @@ describe("agent launch arguments", () => {
       "read,grep",
     ]);
   });
+  it("reopens saved sessions without the delegated bridge or another prompt", () => {
+    const args = agentArgs(spec, "/saved session.jsonl", "/system prompt.md", false);
+    expect(args.slice(0, 2)).toEqual(["--session", "/saved session.jsonl"]);
+    expect(args).not.toContain("-e");
+    expect(args.join(" ")).not.toContain("agent-bridge");
+    expect(args).toContain("vendor/model-id");
+  });
   it("does not invent off for legacy specs without thinking", () => {
     expect(
       agentArgs({ ...spec, agent: { provider: "p", model: "m" } }, "session", "system"),
