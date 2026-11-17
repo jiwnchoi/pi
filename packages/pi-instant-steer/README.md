@@ -12,9 +12,10 @@ Pi's default Esc behavior clears the queue and **returns the input to the editor
 
 When a run ends **aborted** with undelivered steering input, the extension extracts that steering text from the draft restored to the editor and **immediately submits it as a new turn**.
 
+- Intentional steering interrupts omit the red `Operation aborted` row. The interrupted assistant response is recorded with `stopReason: "stop"`; the run itself still aborts and resubmits the queued steering input as before. Ordinary Esc cancellation and nonstandard provider errors are unchanged.
 - Follow-up messages and the user's draft remain in the editor. Codex likewise defers follow-ups until the turn ends.
 - Interrupting while idle or without pending input preserves the existing behavior.
-- The editor is not replaced. Only the `input`, `message_start`, and `agent_settled` events are used to avoid conflicts with extensions that wrap the editor, such as `pi-zentui`.
+- The editor is not replaced. Only the `input`, `message_start`, `message_end`, and agent lifecycle events are used to avoid conflicts with extensions that wrap the editor, such as `pi-zentui`.
 - Steering queue tracking follows Pi's own rules: entries are registered on submission and removed when the corresponding user message starts, so already delivered messages are not resent.
 - Only TUI mode is affected; RPC, JSON, and print modes are unchanged.
 

@@ -104,6 +104,29 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  pi.on("message_end", (event, ctx) => {
+    const message = event.message;
+    if (
+      !enabled ||
+      ctx.mode !== "tui" ||
+      !ctx.signal?.aborted ||
+      pendingSteers.length === 0 ||
+      message.role !== "assistant" ||
+      message.stopReason !== "aborted" ||
+      message.content.some((part) => part.type === "toolCall") ||
+      (message.errorMessage !== undefined &&
+        message.errorMessage !== "Request was aborted" &&
+        message.errorMessage !== "Operation aborted")
+    ) {
+      return;
+    }
+
+    const { steers } = takeBackSteers(editorText(ctx), pendingSteers);
+    if (steers.length === 0) return;
+
+    return { message: { ...message, stopReason: "stop" as const, errorMessage: undefined } };
+  });
+
   pi.on("agent_start", (_event, ctx) => {
     lastCtx = ctx;
     refreshStatus(ctx);
